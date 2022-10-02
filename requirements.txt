@@ -1,0 +1,6 @@
+aiohttp==3.8.3
+aiosqlite==0.17.0
+discord.py==2.0.1
+emoji==2.2.0
+humanize==4.4.0
+toml==0.10.2

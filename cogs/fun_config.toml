@@ -1,0 +1,45 @@
+hug_links = [
+    "https://tenor.com/view/cat-hugs-alydn-gif-26454086",
+    "https://tenor.com/view/hug-love-hi-bye-cat-gif-15999080",
+    "https://tenor.com/view/covid-meme-cute-gif-23513805,",
+    "https://tenor.com/view/dog-gif-25785273",
+    "https://tenor.com/view/lick-kiss-smooch-affection-dog-gif-16669611",
+    "https://tenor.com/view/polar-bear-baby-hug-gif-26055063",
+    "https://tenor.com/view/cat-love-huge-hug-big-gif-11990658",
+    "https://tenor.com/view/hugh-hug-cathug-cathugh-cute-gif-21970142",
+    "https://tenor.com/view/cat-hug-cat-hug-cute-love-gif-23090693",
+    "https://tenor.com/view/heejake-gif-24738397"
+]
+
+# All matches are case-insensitive and are anchored at the beginning but not the end of the string.
+# `<mention>` (without the quotes) denotes a user mention.
+# Textual representations of emojis as well as emojis themselves are allowed. For example: :red_heart:
+[patterns."<mention>?(, )?(good morning)(?!\\S)"]
+reactions = [":sun:"]
+responses = ["Good morning to you, too!"]
+
+[patterns."<mention>?(, )?(g(ood )?night|sleep well|gn|gnite)(?!\\S)"]
+reactions = [":sleeping_face:", ":crescent_moon:"]
+responses = ["Sweet dreams! ~", "Good nighty! :relieved_face:"]
+
+[patterns."<mention>?(, )?(hello|hi|sup|what'?s up)(?!\\S)"]
+reactions = []
+responses = [
+    "What's up? :smiling_face_with_sunglasses:",
+    "Hi! :waving_hand:",
+    "G'day, Sir. :face_with_monocle:",
+    "Hey! :waving_hand:",
+    "How's it going?"
+]
+
+[patterns."<mention>?(, )?(bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?)(?!\\S)"]
+reactions = [":waving_hand:"]
+responses = ["Take care!"]
+
+[patterns."<mention>?(, )?((I )?(love|:red_heart:) (you|u|ya)|hug)(?!\\S)"]
+reactions = [":red_heart:", ":heart_on_fire:", ":revolving_hearts:"]
+responses = ["Aww!", "You're sweet!", "Cute ~"]
+
+[patterns."<mention>?(, )?((I|we )?(thank (you|u|ya))|thankies|thanks)(?!\\S)"]
+reactions = [":OK_hand:", ":face_with_steam_from_nose:"]
+responses = []
