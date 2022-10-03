@@ -3,13 +3,11 @@ from disnake.ext import commands
 import sqlite3
 
 # database stuff
-con = sqlite3.connect('data.db')
+with open('create_dbs.sql') as file:
+    sql_script = file.read()
+con = sqlite3.connect('data.sqlite')
 cur = con.cursor()
-cur.execute('CREATE TABLE IF NOT EXISTS settings(key, server, value)')
-data = [
-    ('starboard-channel', None, None),
-]
-cur.executemany('INSERT OR IGNORE INTO settings VALUES(?, ?, ?)', data)
+cur.executescript(sql_script)
 con.commit()
 
 # initialize bot
@@ -17,7 +15,7 @@ with open('bot-token.txt') as file:
     bot_token = file.read()
 bot = commands.InteractionBot()
 
-# commands start here
+
 @bot.event
 async def on_ready():
     print(f'We have logged in as {bot.user}')
@@ -27,6 +25,5 @@ async def on_ready():
 async def hello(inter):
     await inter.response.send_message('World')
 
-# run bot
-if __name__ == '__main__':
-    bot.run(bot_token)
+# start bot
+bot.run(bot_token)

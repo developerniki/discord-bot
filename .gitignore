@@ -130,4 +130,4 @@ dmypy.json
 
 # Custom
 bot-token.txt
-data.db
+data.sqlite
