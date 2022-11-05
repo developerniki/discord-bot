@@ -7,10 +7,13 @@ import discord
 import toml
 from discord.ext import commands
 
+import tools
+
 _logger = logging.getLogger(__name__)
 
 ROOT_DIR = Path(__file__).parent.resolve()
 CFG_LOC = ROOT_DIR / 'config.toml'
+tools.generate_config(CFG_LOC)
 with open(ROOT_DIR / 'config.toml') as file:
     CONFIG = toml.load(file)
 
@@ -125,7 +128,8 @@ class Core(commands.Cog, name='core'):
     async def _unload_extension(self, ctx: commands.Context, name: str):
         """Unloads an extension."""
         await self.bot.unload_extension(f'{self.bot.extension_prefix}.{name}')
-        embed = discord.Embed(title='Unloaded extension', description=f'Unloaded **{name}**.', color=discord.Color.purple())
+        embed = discord.Embed(title='Unloaded extension', description=f'Unloaded **{name}**.',
+                              color=discord.Color.purple())
         await ctx.send(embed=embed, ephemeral=True)
 
     @commands.hybrid_command(name='reload', hidden=True)
@@ -133,7 +137,8 @@ class Core(commands.Cog, name='core'):
     async def _reload_extension(self, ctx: commands.Context, name: str):
         """Reloads an extension."""
         await self.bot.reload_extension(f'{self.bot.extension_prefix}.{name}')
-        embed = discord.Embed(title='Reloaded extension', description=f'Reloaded **{name}**.', color=discord.Color.purple())
+        embed = discord.Embed(title='Reloaded extension', description=f'Reloaded **{name}**.',
+                              color=discord.Color.purple())
         await ctx.send(embed=embed, ephemeral=True)
 
     @commands.hybrid_command(name='sync', hidden=True)

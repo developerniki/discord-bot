@@ -1,8 +1,31 @@
 import html
+from pathlib import Path
 
 import aiohttp
 from aiohttp import ContentTypeError, ClientConnectorError
 from discord import User, Member
+
+DEFAULT_CONFIG = """token = '<insert your Discord token here>'
+
+[defaults]
+# These settings only apply if server-specific settings don't overwrite them.
+command_prefix = '?'
+ticket_cooldown = 3600
+
+[paths]
+database = 'data.db'
+log = 'logs/slimbot.log'
+cogs = 'cogs'
+images = 'images'
+migrations = 'migrations'
+"""
+
+
+def generate_config(location):
+    """If the config.toml file does not exist, generate it."""
+    config_file = Path(location)
+    if not config_file.exists():
+        config_file.write_text(DEFAULT_CONFIG)
 
 
 def quote_message(message: str):
