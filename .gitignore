@@ -129,5 +129,7 @@ dmypy.json
 .pyre/
 
 # Custom
-bot-token.txt
-data.sqlite
+.idea/
+logs/
+config.toml
+data.db
