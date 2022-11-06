@@ -69,6 +69,7 @@ class SlimBot(commands.Bot):
         with open(self.mig_dir / '0__create_dbs.sql') as file:
             sql_script = file.read()
 
+        Path(self.db_loc).parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.db_loc) as con:
             await con.executescript(sql_script)
             await con.execute('DELETE FROM DefaultSettings')
