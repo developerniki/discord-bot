@@ -649,7 +649,7 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
         # Kick the user.
         user_id = self.verification_request.user_id
         member = interaction.guild.get_member(user_id)
-        # await member.kick(reason=self.kick_reason_text_input.value) # TODO
+        await member.kick(reason=self.kick_reason_text_input.value)
 
         # Store the decision to not verify the user in the database.
         await self.vs.verification_request_store.close(self.verification_request, False)
