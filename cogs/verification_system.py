@@ -663,7 +663,8 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
         # Kick the user.
         user_id = self.verification_request.user_id
         member = interaction.guild.get_member(user_id)
-        await member.kick(reason=self.kick_reason_text_input.value)
+        kick_reason = self.kick_reason_text_input.value
+        await member.kick(reason=kick_reason)
 
         # Store the decision to not verify the user in the database.
         await self.vs.verification_request_store.close(self.verification_request, False)
@@ -703,10 +704,11 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
             await self.verification_notification_view.message.edit(embed=embed,
                                                                    attachments=[file],
                                                                    view=self.verification_notification_view)
-            await interaction.response.send_message(
-                f"{interaction.user.mention} rejected {member.mention}'s verification request! "
-                "They were subsequently kicked."
-            )
+            message = f"{interaction.user.mention} rejected {member.mention}'s verification request! " \
+                      "They were subsequently kicked."
+            if kick_reason:
+                message += f' They have provided the following reason:\n{tools.quote_message(kick_reason)}' or ''
+            await interaction.response.send_message(message)
 
 
 async def setup(bot: SlimBot) -> None:

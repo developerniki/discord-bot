@@ -856,13 +856,6 @@ class TicketNotificationView(ui.View):
             # Store the decision to accept the ticket in the database.
             await self.ts.ticket_request_store.accept(ticket_request=self.ticket_request, ticket=ticket)
 
-            # Notify the user that the action is complete and a channel has been created.
-            await interaction.followup.send(
-                f'{interaction.user.mention} accepted the ticket request. '
-                f'Therefore, a channel has been created at {channel.mention}.',
-                ephemeral=False
-            )
-
             # Stop listening to the view and deactivate it.
             self.stop()
             self.remove_item(self.reject_button)
@@ -878,6 +871,13 @@ class TicketNotificationView(ui.View):
 
             # Send the edited embed and view.
             await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
+
+            # Notify the user that the action is complete and a channel has been created.
+            await interaction.followup.send(
+                f'{interaction.user.mention} accepted the ticket request. '
+                f'Therefore, a channel has been created at {channel.mention}.',
+                ephemeral=False
+            )
 
     async def reject_ticket_request(self, interaction: Interaction) -> None:
         # `self.lock` and the `self.is_finished()` call ensure that the view is only responded to once.
@@ -932,13 +932,6 @@ class TicketNotificationView(ui.View):
                 cooldown_in_secs=cooldown_in_secs
             )
 
-            # Notify the user that the action is complete and a channel has been created.
-            await interaction.followup.send(
-                f'{interaction.user.mention} rejected the ticket request. '
-                f'Therefore, a channel has been created at {channel.mention}.',
-                ephemeral=False
-            )
-
             # Stop listening to the view and deactivate it.
             self.stop()
             self.remove_item(self.accept_button)
@@ -954,6 +947,13 @@ class TicketNotificationView(ui.View):
 
             # Send the edited embed and view.
             await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
+
+            # Notify the user that the action is complete and a channel has been created.
+            await interaction.followup.send(
+                f'{interaction.user.mention} rejected the ticket request. '
+                f'Therefore, a channel has been created at {channel.mention}.',
+                ephemeral=False
+            )
 
 
 async def setup(bot: SlimBot) -> None:
