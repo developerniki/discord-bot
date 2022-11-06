@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS Tickets(
     status VARCHAR CHECK (status IN ("open", "closed")),
     channel_id BIGINT,
     log VARCHAR,
-    created_at INTEGER,
-    closed_at INTEGER
+    created_at BIGINT,
+    closed_at BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS TicketRequests(
@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS TicketRequests(
     reason VARCHAR,
     status VARCHAR CHECK (status IN ("pending", "accepted", "rejected")),
     channel_id BIGINT,
-    created_at INTEGER,
-    closed_at INTEGER,
+    created_at BIGINT,
+    closed_at BIGINT,
     FOREIGN KEY (ticket_id) REFERENCES ticket(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
@@ -42,4 +42,14 @@ CREATE TABLE IF NOT EXISTS UserTicketCooldowns(
     cooldown_ends_at INTEGER NOT NULL,
     FOREIGN KEY (ticket_id) REFERENCES ticket(id) ON UPDATE CASCADE ON DELETE CASCADE
     PRIMARY KEY (guild_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS VerificationRequests(
+    id INTEGER PRIMARY KEY,
+    guild_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    welcome_message_id BIGINT NOT NULL,
+    verified BOOLEAN NOT NULL CHECK (verified IN (FALSE, TRUE)),
+    joined_at BIGINT NOT NULL,
+    closed_at BIGINT
 );

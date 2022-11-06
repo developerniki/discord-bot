@@ -7,18 +7,32 @@ import discord
 import toml
 from discord.ext import commands
 
-import tools
-
 _logger = logging.getLogger(__name__)
-
 ROOT_DIR = Path(__file__).parent.resolve()
 CFG_LOC = ROOT_DIR / 'config.toml'
-tools.generate_config(CFG_LOC)
-with open(ROOT_DIR / 'config.toml') as file:
-    CONFIG = toml.load(file)
+DEFAULT_CONFIG = """# token = '<uncomment this line and insert your Discord token here>'
+
+[defaults]
+# These settings only apply if server-specific settings don't overwrite them.
+command_prefix = '?'
+ticket_cooldown = 3600
+
+[paths]
+database = 'data.db'
+log = 'logs/slimbot.log'
+cogs = 'cogs'
+images = 'images'
+migrations = 'migrations'
+"""
+config_file = Path(CFG_LOC)
+if not config_file.exists():
+    config_file.write_text(DEFAULT_CONFIG)
+CONFIG = toml.loads(config_file.read_text())
 
 
 class SlimBot(commands.Bot):
+    """The main class of this application."""
+
     def __init__(self) -> None:
         self.root_dir = ROOT_DIR
         self.cog_dir = self.root_dir / CONFIG['paths']['cogs']
@@ -227,6 +241,6 @@ if __name__ == '__main__':
     bot = SlimBot()
     try:
         setup_logging(bot.log_loc)
-        bot.run(CONFIG['token'], log_handler=None)  # Set `log_handler` to `None` as we manually setup logging.
+        bot.run(CONFIG['token'], log_handler=None)  # Set `log_handler` to `None` as we manually set up logging.
     except KeyError as err:
         _logger.exception(f'Key `token` not found in {CFG_LOC}.')

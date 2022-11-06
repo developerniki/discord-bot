@@ -7,7 +7,7 @@ from typing import List, Optional
 import aiosqlite
 import discord
 import humanize
-from discord import ui, ButtonStyle, Interaction, Embed, Color, TextChannel, User, CategoryChannel
+from discord import ui, ButtonStyle, Interaction, Embed, TextChannel, User, CategoryChannel
 from discord.ext import commands, tasks
 from emoji import emojize
 
@@ -94,7 +94,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
             description += f'They have given the following reason:\n{tools.quote_message(ticket.reason)}\n\n'
         description += 'To close this ticket use `/ticket close`. ' \
                        'To add another user to the ticket use `/ticket add_user <@user>`.'
-        embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=Color.yellow(),
+        embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=discord.Color.yellow(),
                       timestamp=datetime.now(timezone.utc))
         file = discord.File(self.bot.img_dir / 'accepted_ticket.png', filename='image.png')
         embed.set_thumbnail(url='attachment://image.png')
@@ -104,7 +104,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         description = f'{ctx.author.mention} has created a ticket for {member.mention} at {channel.mention}.'
         if reason:
             description += f' They have given the following reason:\n{tools.quote_message(reason)}'
-        embed = Embed(title='Manual Ticket Creation', description=description, color=Color.yellow(),
+        embed = Embed(title='Manual Ticket Creation', description=description, color=discord.Color.yellow(),
                       timestamp=datetime.now(timezone.utc))
         embed.set_author(name=tools.user_string(member),
                          url=f'https://discordapp.com/users/{member.id}',
@@ -305,7 +305,8 @@ class Ticket:
     """The in-memory representation of a ticket in the database."""
 
     def __init__(self, ticket_id: int, guild_id: int, user_id: int, reason: Optional[str], status: str,
-                 channel_id: Optional[int], log: Optional[str], created_at: Optional[int], closed_at: Optional[int]):
+                 channel_id: Optional[int], log: Optional[str], created_at: Optional[int],
+                 closed_at: Optional[int]) -> None:
         assert status in ('open', 'closed')
         self.id = ticket_id
         self.guild_id = guild_id
@@ -323,7 +324,7 @@ class TicketRequest:
 
     def __init__(self, ticket_request_id: int, guild_id: int, user_id: int, ticket_id: Optional[int],
                  reason: Optional[str], status: str, channel_id: Optional[int], created_at: Optional[int],
-                 closed_at: Optional[int]):
+                 closed_at: Optional[int]) -> None:
         assert status in ('pending', 'accepted', 'rejected')
         self.id = ticket_request_id
         self.guild_id = guild_id
@@ -337,7 +338,9 @@ class TicketRequest:
 
 
 class TicketSettingsStore(BaseStore):
-    def __init__(self, db_loc: str):
+    """Handles database access with the `Settings` table for settings related to the ticket system."""
+
+    def __init__(self, db_loc: str) -> None:
         super().__init__(db_loc)
 
     async def get_request_channel_id(self, guild_id: int) -> int:
@@ -355,7 +358,9 @@ class TicketSettingsStore(BaseStore):
 
 
 class TicketStore(BaseStore):
-    def __init__(self, db_loc: str):
+    """Handles database access with the `Tickets` table."""
+
+    def __init__(self, db_loc: str) -> None:
         super().__init__(db_loc)
 
     async def num_open(self, guild_id: int, user_id: int) -> int:
@@ -473,7 +478,9 @@ class TicketStore(BaseStore):
 
 
 class TicketRequestStore(BaseStore):
-    def __init__(self, db_loc: str):
+    """Handles database access with the `TicketRequests` table."""
+
+    def __init__(self, db_loc: str) -> None:
         super().__init__(db_loc)
 
     async def create(self, guild_id: int, user_id: int, reason: Optional[str]) -> TicketRequest:
@@ -610,7 +617,9 @@ class TicketRequestStore(BaseStore):
 
 
 class TicketCooldownStore(BaseStore):
-    def __init__(self, db_loc: str):
+    """Handles database access with the `UserTicketCooldowns` table."""
+
+    def __init__(self, db_loc: str) -> None:
         super().__init__(db_loc)
 
     async def get_remaining_cooldown(self, guild_id: int, user_id: int) -> int:
@@ -753,11 +762,11 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
             reason=self.reason_txt_input.value,
         )
 
-        # Create the embed.
+        # Create the ticket notification embed.
         description = f'{interaction.user.mention} has requested a ticket.'
         if self.reason_txt_input.value:
             description += f' They have left the following message:\n{tools.quote_message(self.reason_txt_input.value)}'
-        embed = Embed(title=f'Ticket Request #{ticket_request.id}', description=description, color=Color.blue(),
+        embed = Embed(title=f'Ticket Request #{ticket_request.id}', description=description, color=discord.Color.blue(),
                       timestamp=datetime.now(timezone.utc))
         embed.set_author(name=tools.user_string(interaction.user),
                          url=f'https://discordapp.com/users/{interaction.user.id}',
@@ -765,7 +774,7 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
         file = discord.File(self.ts.bot.img_dir / 'accept_reject.png', filename='image.png')
         embed.set_thumbnail(url='attachment://image.png')
 
-        # Create the view with buttons and associated functionality.
+        # Create the ticket notification view.
         ticket_notification_view = TicketNotificationView(ticket_system=self.ts, ticket_request=ticket_request)
 
         # Send the embed and view to the ticket request channel.
@@ -809,13 +818,6 @@ class TicketNotificationView(ui.View):
             if self.is_finished():
                 return
 
-            # Stop listening to the view and deactivate it.
-            self.stop()
-            self.remove_item(self.reject_button)
-            self.accept_button.label = f'{self.accept_button.label}ed'
-            self.accept_button.disabled = True
-            await interaction.response.edit_message(view=self)
-
             # Create the ticket.
             ticket = await self.ts.ticket_store.create(
                 self.ticket_request.guild_id,
@@ -845,7 +847,7 @@ class TicketNotificationView(ui.View):
                 description += f'They wanted to talk about the following:\n{tools.quote_message(ticket.reason)}\n\n'
             description += 'To close this ticket use `/ticket close`. ' \
                            'To add another user to the ticket use `/ticket adduser <@user>`.'
-            embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=Color.yellow(),
+            embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=discord.Color.yellow(),
                           timestamp=datetime.now(timezone.utc))
             file = discord.File(self.ts.bot.img_dir / 'accepted_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
@@ -861,30 +863,27 @@ class TicketNotificationView(ui.View):
                 ephemeral=False
             )
 
+            # Stop listening to the view and deactivate it.
+            self.stop()
+            self.remove_item(self.reject_button)
+            self.accept_button.label = f'{self.accept_button.label}ed'
+            self.accept_button.disabled = True
+
             # Edit the original embed.
-            # TODO
-            # original_response = await interaction.original_response()
-            # embed = original_response.embeds[0]
             embed = interaction.message.embeds[0]
             embed.title += ' [ACCEPTED]'
-            embed.colour = Color.yellow()
+            embed.colour = discord.Color.green()
             file = discord.File(self.ts.bot.img_dir / 'accepted_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
-            # await original_response.edit(embed=embed, attachments=[file])
-            await interaction.message.edit(embed=embed, attachments=[file])
+
+            # Send the edited embed and view.
+            await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
 
     async def reject_ticket_request(self, interaction: Interaction) -> None:
         # `self.lock` and the `self.is_finished()` call ensure that the view is only responded to once.
         async with self.lock:
             if self.is_finished():
                 return
-
-            # Stop listening to the view and deactivate it.
-            self.stop()
-            self.remove_item(self.accept_button)
-            self.reject_button.label = f'{self.reject_button.label}ed'
-            self.reject_button.disabled = True
-            await interaction.response.edit_message(view=self)
 
             # Create the ticket text channel and set permissions accordingly.
             # NOTE: Even though the ticket was rejected, we create a channel to notify the user of this decision.
@@ -918,7 +917,7 @@ class TicketNotificationView(ui.View):
                            'To add another user to the channel use `/ticket adduser <@user>`.'
             embed = Embed(title=f'Ticket Request #{self.ticket_request.id} [REJECTED]',
                           description=description,
-                          color=Color.red(),
+                          color=discord.Color.red(),
                           timestamp=datetime.now(timezone.utc))
             file = discord.File(self.ts.bot.img_dir / 'rejected_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
@@ -940,17 +939,21 @@ class TicketNotificationView(ui.View):
                 ephemeral=False
             )
 
+            # Stop listening to the view and deactivate it.
+            self.stop()
+            self.remove_item(self.accept_button)
+            self.reject_button.label = f'{self.reject_button.label}ed'
+            self.reject_button.disabled = True
+
             # Edit the original embed.
-            # TODO
-            # original_response = await interaction.original_response()
-            # embed = original_response.embeds[0]
             embed = interaction.message.embeds[0]
             embed.title += ' [REJECTED]'
-            embed.colour = Color.red()
+            embed.colour = discord.Color.red()
             file = discord.File(self.ts.bot.img_dir / 'rejected_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
-            await interaction.message.edit(embed=embed, attachments=[file])
-            # await original_response.edit(embed=embed, attachments=[file])
+
+            # Send the edited embed and view.
+            await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
 
 
 async def setup(bot: SlimBot) -> None:

@@ -1,31 +1,8 @@
 import html
-from pathlib import Path
 
 import aiohttp
 from aiohttp import ContentTypeError, ClientConnectorError
 from discord import User, Member
-
-DEFAULT_CONFIG = """token = '<insert your Discord token here>'
-
-[defaults]
-# These settings only apply if server-specific settings don't overwrite them.
-command_prefix = '?'
-ticket_cooldown = 3600
-
-[paths]
-database = 'data.db'
-log = 'logs/slimbot.log'
-cogs = 'cogs'
-images = 'images'
-migrations = 'migrations'
-"""
-
-
-def generate_config(location):
-    """If the config.toml file does not exist, generate it."""
-    config_file = Path(location)
-    if not config_file.exists():
-        config_file.write_text(DEFAULT_CONFIG)
 
 
 def quote_message(message: str):
@@ -36,6 +13,13 @@ def quote_message(message: str):
 def user_string(user: User | Member) -> str:
     """Given a `User` or `Member`, return a string containing the user's name, discriminator, and user ID."""
     return f'{user.name}#{user.discriminator} ({user.id})'
+
+
+def unix_seconds_from_discord_snowflake_id(snowflake_id: int) -> int:
+    """Converts a Discord snowflake ID to a unix timestamp in seconds as described here:
+    https://discord.com/developers/docs/reference#snowflakes"""
+    discord_epoch = 1_420_070_400_000
+    return ((snowflake_id >> 22) + discord_epoch) // 1_000
 
 
 async def fetch_from_api(url: str, default: str) -> str:

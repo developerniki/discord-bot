@@ -1,23 +1,32 @@
+import asyncio
 import logging
+import random
+import re
+import time
+from datetime import datetime, timezone
+from typing import Optional, List
 
+import aiosqlite
 import discord
-from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message
+from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User
 from discord.ext import commands
 from emoji import emojize
 
+import tools
 from main import SlimBot, BaseStore
 
 _logger = logging.getLogger(__name__)
 
 
 class VerificationSystem(commands.GroupCog, name='verify'):
-    """A group cog that verifies people and then welcomes them."""
+    """A group cog that verifies new members on join and then welcomes them."""
 
     def __init__(self, bot: SlimBot) -> None:
         self.bot = bot
         self._views_added = False
 
         self.verification_settings_store = VerificationSettingStore(self.bot.db_loc)
+        self.verification_request_store = VerificationRequestStore(self.bot.db_loc)
         self._views_added = False
 
     @commands.Cog.listener()
@@ -25,10 +34,20 @@ class VerificationSystem(commands.GroupCog, name='verify'):
         await self.bot.wait_until_ready()
 
         if not self._views_added:
-            ticket_request_view = VerificationRequestView(self)
+            verification_request_view = VerificationRequestView(self)
+            self.bot.add_view(verification_request_view)
+
             choose_basic_info_view = ChooseBasicInfoView(self)
-            self.bot.add_view(ticket_request_view)
             self.bot.add_view(choose_basic_info_view)
+
+            pending_verification_requests = await self.verification_request_store.get_pending()
+            for verification_request in pending_verification_requests:
+                verification_request_view = VerificationNotificationView(
+                    verification_system=self,
+                    verification_request=verification_request
+                )
+                self.bot.add_view(verification_request_view)
+
             self._views_added = True
 
     @commands.Cog.listener()
@@ -36,37 +55,89 @@ class VerificationSystem(commands.GroupCog, name='verify'):
         welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(member.guild.id)
         welcome_channel = welcome_channel_id and member.guild.get_channel(welcome_channel_id)
 
+        verified_welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(member.guild.id)
+        verified_welcome_channel = welcome_channel_id and member.guild.get_channel(verified_welcome_channel_id)
+
+        verified_welcome_message = await self.verification_settings_store.get_verified_welcome_message(member.guild.id)
+
         request_channel_id = await self.verification_settings_store.get_request_channel_id(member.guild.id)
         request_channel = request_channel_id and member.guild.get_channel(request_channel_id)
 
         role_id = await self.verification_settings_store.get_role_id(member.guild.id)
         role = role_id and member.guild.get_role(role_id)
 
-        if None in (welcome_channel, request_channel, role):
+        if None in (welcome_channel, verified_welcome_channel, verified_welcome_message, request_channel, role):
             return
         else:
             verification_request_view = VerificationRequestView(self)
-            await welcome_channel.send(content=f'Welcome {member.mention}!', view=verification_request_view)
+            description = f'Welcome {member.mention}! To have access to the rest of the server, ' \
+                          'please click on the button below and complete the verification process.'
+            embed = Embed(title='Verification Request', description=description,
+                          color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
+            await welcome_channel.send(embed=embed, view=verification_request_view)
 
-    # TODO delete
     @commands.hybrid_command()
-    async def verification_button(self, ctx: commands.Context):
-        """Create a verification button."""
-        member = ctx.author
-        welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(member.guild.id)
-        welcome_channel = welcome_channel_id and member.guild.get_channel(welcome_channel_id)
+    @commands.has_guild_permissions(manage_roles=True)
+    async def verification_button(self, ctx: commands.Context, user: User):
+        """Create a verification button for `user`."""
+        welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(ctx.guild.id)
+        welcome_channel = welcome_channel_id and ctx.guild.get_channel(welcome_channel_id)
 
-        request_channel_id = await self.verification_settings_store.get_request_channel_id(member.guild.id)
-        request_channel = request_channel_id and member.guild.get_channel(request_channel_id)
+        verified_welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(ctx.guild.id)
+        verified_welcome_channel = welcome_channel_id and ctx.guild.get_channel(verified_welcome_channel_id)
 
-        role_id = await self.verification_settings_store.get_role_id(member.guild.id)
-        role = role_id and member.guild.get_role(role_id)
+        verified_welcome_message = await self.verification_settings_store.get_verified_welcome_message(ctx.guild.id)
 
-        if None in (welcome_channel, request_channel, role):
-            return
+        request_channel_id = await self.verification_settings_store.get_request_channel_id(ctx.guild.id)
+        request_channel = request_channel_id and ctx.guild.get_channel(request_channel_id)
+
+        role_id = await self.verification_settings_store.get_role_id(ctx.guild.id)
+        role = role_id and ctx.guild.get_role(role_id)
+
+        if None in (welcome_channel, verified_welcome_channel, verified_welcome_message, request_channel, role):
+            await ctx.send(
+                'Cannot create a button. First, configure the necessary settings using the '
+                '`/setup_verification_system` command.',
+                ephemeral=True
+            )
         else:
             verification_request_view = VerificationRequestView(self)
-            await ctx.send(content=f'Welcome {member.mention}!', view=verification_request_view)
+            description = f'Welcome {user.mention}! To have access to the rest of the server, ' \
+                          'please click on the button below and complete the verification process.'
+            embed = Embed(title='Verification Request', description=description,
+                          color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
+            await ctx.send(embed=embed, view=verification_request_view)
+
+    @commands.hybrid_command()
+    @commands.has_guild_permissions(manage_channels=True)
+    async def setup_verification_system(self, ctx: commands.Context,
+                                        welcome_channel: TextChannel,
+                                        verified_welcome_channel: TextChannel,
+                                        verified_welcome_message: str,
+                                        verification_request_channel: TextChannel,
+                                        verification_role: Role) -> None:
+        """Set up all necessary channels and roles for the verification system to work."""
+        await self.verification_settings_store.set_welcome_channel_id(
+            guild_id=ctx.guild.id,
+            channel_id=welcome_channel.id
+        )
+        await self.verification_settings_store.set_verified_welcome_channel_id(
+            guild_id=ctx.guild.id,
+            channel_id=verified_welcome_channel.id
+        )
+        await self.verification_settings_store.set_verified_welcome_message(
+            guild_id=ctx.guild.id,
+            message=verified_welcome_message
+        )
+        await self.verification_settings_store.set_request_channel_id(
+            guild_id=ctx.guild.id,
+            channel_id=verification_request_channel.id
+        )
+        await self.verification_settings_store.set_role_id(
+            guild_id=ctx.guild.id,
+            role_id=verification_role.id
+        )
+        await ctx.send('Everything set up for the verification system to work!', ephemeral=True)
 
     @commands.hybrid_command()
     @commands.has_guild_permissions(manage_channels=True)
@@ -85,6 +156,42 @@ class VerificationSystem(commands.GroupCog, name='verify'):
         """Set the welcome channel."""
         await self.verification_settings_store.set_welcome_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
         await ctx.send(f'The welcome channel has been set to {channel.mention}.', ephemeral=True)
+
+    @commands.hybrid_command()
+    @commands.has_guild_permissions(manage_channels=True)
+    async def get_verified_welcome_channel(self, ctx: commands.Context) -> None:
+        """Get the verified welcome channel used to welcome the user with more information after verification."""
+        channel_id = await self.verification_settings_store.get_verified_welcome_channel_id(ctx.guild.id)
+        channel = channel_id and ctx.guild.get_channel(channel_id)
+        if channel is None:
+            await ctx.send(f'The verified welcome channel is not configured yet.', ephemeral=True)
+        else:
+            await ctx.send(f'The verified welcome channel is {channel.mention}.', ephemeral=True)
+
+    @commands.hybrid_command()
+    @commands.has_guild_permissions(manage_channels=True)
+    async def set_verified_welcome_channel(self, ctx: commands.Context, channel: TextChannel) -> None:
+        """Set the verified welcome channel used to welcome the user with more information after verification."""
+        await self.verification_settings_store.set_verified_welcome_channel_id(guild_id=ctx.guild.id,
+                                                                               channel_id=channel.id)
+        await ctx.send(f'The verified welcome channel has been set to {channel.mention}.', ephemeral=True)
+
+    @commands.hybrid_command()
+    @commands.has_guild_permissions(manage_channels=True)
+    async def get_verified_welcome_message(self, ctx: commands.Context) -> None:
+        """Get the verified welcome message used to welcome verified users."""
+        message = await self.verification_settings_store.get_verified_welcome_message(ctx.guild.id)
+        if message is None:
+            await ctx.send(f'The verified welcome message is not configured yet.', ephemeral=True)
+        else:
+            await ctx.send(f'The verified welcome message is `{message}`.', ephemeral=True)
+
+    @commands.hybrid_command()
+    @commands.has_guild_permissions(manage_channels=True)
+    async def set_verified_welcome_channel(self, ctx: commands.Context, message: str) -> None:
+        """Set the verified welcome message used to welcome verified users."""
+        await self.verification_settings_store.set_verified_welcome_message(guild_id=ctx.guild.id, message=message)
+        await ctx.send(f'The verified welcome message has been set to `{message}`.', ephemeral=True)
 
     @commands.hybrid_command()
     @commands.has_guild_permissions(manage_channels=True)
@@ -123,8 +230,24 @@ class VerificationSystem(commands.GroupCog, name='verify'):
         await ctx.send(f'The verification request channel has been set to {role.mention}.', ephemeral=True)
 
 
+class VerificationRequest:
+    """The in-memory representation of a user verification in the database."""
+
+    def __init__(self, user_verification_id: int, guild_id: int, user_id: int, welcome_message_id: int, verified: bool,
+                 joined_at: int, closed_at: Optional[int]) -> None:
+        self.id = user_verification_id
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.welcome_message_id = welcome_message_id
+        self.verified = verified
+        self.joined_at = joined_at
+        self.closed_at = closed_at
+
+
 class VerificationSettingStore(BaseStore):
-    def __init__(self, db_loc: str):
+    """Handles database access with the `Settings` table for settings related to the verification system."""
+
+    def __init__(self, db_loc: str) -> None:
         super().__init__(db_loc)
 
     async def get_welcome_channel_id(self, guild_id: int) -> int:
@@ -133,6 +256,20 @@ class VerificationSettingStore(BaseStore):
 
     async def set_welcome_channel_id(self, guild_id: int, channel_id: int) -> None:
         await self.set_setting(guild_id, 'welcome_channel_id', channel_id)
+
+    async def get_verified_welcome_channel_id(self, guild_id: int) -> int:
+        channel_id = await self.get_setting(guild_id, 'verified_welcome_channel_id')
+        return channel_id
+
+    async def set_verified_welcome_channel_id(self, guild_id: int, channel_id: int) -> None:
+        await self.set_setting(guild_id, 'verified_welcome_channel_id', channel_id)
+
+    async def get_verified_welcome_message(self, guild_id: int) -> str:
+        message = await self.get_setting(guild_id, 'verified_welcome_message')
+        return message
+
+    async def set_verified_welcome_message(self, guild_id: int, message: str) -> None:
+        await self.set_setting(guild_id, 'verified_welcome_message', message)
 
     async def get_request_channel_id(self, guild_id: int) -> int:
         channel_id = await self.get_setting(guild_id, 'verification_request_channel_id')
@@ -149,6 +286,60 @@ class VerificationSettingStore(BaseStore):
         await self.set_setting(guild_id, 'verified_role_id', role_id)
 
 
+class VerificationRequestStore(BaseStore):
+    """Handles database access with the `VerificationRequests` table."""
+
+    def __init__(self, db_loc: str) -> None:
+        super().__init__(db_loc)
+
+    async def create(self, guild_id: int, user_id: int, welcome_message_id: int) -> VerificationRequest:
+        async with aiosqlite.connect(self.db_loc) as con:
+            statement = """INSERT INTO
+                        VerificationRequests(guild_id, user_id, welcome_message_id, verified, joined_at)
+                        VALUES (?, ?, ?, FALSE, ?)
+                        """
+            joined_at = tools.unix_seconds_from_discord_snowflake_id(welcome_message_id)
+            cur = await con.execute(statement, (guild_id, user_id, welcome_message_id, joined_at))
+            await con.commit()
+            user_verification = VerificationRequest(user_verification_id=cur.lastrowid, guild_id=guild_id,
+                                                    user_id=user_id, welcome_message_id=welcome_message_id,
+                                                    verified=False, joined_at=joined_at, closed_at=None)
+            return user_verification
+
+    async def close(self, verification_request: VerificationRequest, verified: bool) -> None:
+        async with aiosqlite.connect(self.db_loc) as con:
+            statement = """UPDATE VerificationRequests SET verified=?, closed_at=? WHERE id=?"""
+            closed_at = int(time.time())
+            await con.execute(statement, (verified, closed_at, verification_request.id))
+            await con.commit()
+            verification_request.verified = verified
+
+    async def get_pending(self) -> List[VerificationRequest]:
+        async with aiosqlite.connect(self.db_loc) as con:
+            statement = 'SELECT * FROM VerificationRequests WHERE closed_at IS NULL'
+            cur = await con.execute(statement)
+            verification_requests_raw = await cur.fetchall()
+            verification_requests = [
+                VerificationRequest(
+                    user_verification_id=user_verification_id,
+                    guild_id=guild_id,
+                    user_id=user_id,
+                    welcome_message_id=welcome_message_id,
+                    verified=verified,
+                    joined_at=joined_at,
+                    closed_at=closed_at
+                )
+                for user_verification_id, guild_id, user_id, welcome_message_id, verified, joined_at, closed_at
+                in verification_requests_raw
+            ]
+            return verification_requests
+
+
+class MissingWelcomeMessageError(Exception):
+    """Exception raised when the welcome message for a particular verification request is missing."""
+    pass
+
+
 class VerificationRequestView(ui.View):
     """A button that allows a user to request verification."""
 
@@ -157,8 +348,11 @@ class VerificationRequestView(ui.View):
         self.vs = verification_system
 
     async def interaction_check(self, interaction: Interaction) -> bool:
-        belongs_to = [x.id for x in interaction.message.mentions]
-        if interaction.user.id not in belongs_to:
+        mention_pattern = re.compile('<@!?([0-9]+)>')
+        embed_description = interaction.message.embeds[0].description
+        mentioned_user_ids = mention_pattern.findall(embed_description)
+        mentioned_user_ids = [int(x) for x in mentioned_user_ids]
+        if interaction.user.id not in mentioned_user_ids:
             await interaction.response.send_message('This is not your verification button!', ephemeral=True)
             return False
         else:
@@ -224,6 +418,16 @@ class ChooseBasicInfoView(ui.View):
         await interaction.response.defer()
 
     async def submit(self, interaction: Interaction) -> None:
+        # Get the welcome message. First, look if it is available in cache, otherwise, fetch it.
+        if interaction.message.reference is not None:
+            if interaction.message.reference.cached_message is None:
+                channel = self.vs.bot.get_channel(interaction.message.reference.channel_id)
+                welcome_message = await channel.fetch_message(interaction.message.reference.message_id)
+            else:
+                welcome_message = interaction.message.reference.cached_message
+        else:
+            raise MissingWelcomeMessageError()
+
         age_range = self.age_range_select.values
         age_range = age_range and age_range[0]
         gender = self.gender_select.values
@@ -232,18 +436,9 @@ class ChooseBasicInfoView(ui.View):
         if not gender or not age_range:
             await interaction.response.send_message(content='Please fill out both fields!', ephemeral=True)
 
-        if interaction.message.reference is not None:
-            if interaction.message.reference.cached_message is None:
-                channel = self.vs.bot.get_channel(interaction.message.reference.channel_id)
-                welcome_message = await channel.fetch_message(interaction.message.reference.message_id)
-            else:
-                welcome_message = interaction.message.reference.cached_message
-        else:
-            welcome_message = None
-
-        request_ticket_modal = ChooseAdvancedInfoModal(verification_system=self.vs, age_range=age_range, gender=gender,
-                                                       welcome_message=welcome_message)
-        await interaction.response.send_modal(request_ticket_modal)
+        choose_advanced_info_modal = ChooseAdvancedInfoModal(verification_system=self.vs, age_range=age_range,
+                                                             gender=gender, welcome_message=welcome_message)
+        await interaction.response.send_modal(choose_advanced_info_modal)
         await interaction.edit_original_response(content='To retry, click the `Verify me!` button again.', view=None)
 
 
@@ -252,19 +447,20 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
 
     def __init__(self, verification_system: VerificationSystem, age_range: str, gender: str,
                  welcome_message: Message) -> None:
-        super().__init__(timeout=None)
+        super().__init__()
+
         self.vs = verification_system
         self.age_range = age_range
         assert age_range in ('12-15', '16-17', '18-29', '30-39', '40+')
         assert gender in ('male', 'female', 'non-binary')
         self.gender = gender
         self.welcome_message = welcome_message
+
         self.join_reason_text_input = ui.TextInput(
             label='Referrer',
             placeholder='How did you find out about this server?',
-            style=discord.TextStyle.paragraph,
             required=True,
-            max_length=500
+            max_length=100
         )
         self.additional_info_text_input = ui.TextInput(
             label='Join Reason',
@@ -278,193 +474,224 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         self.add_item(self.additional_info_text_input)
 
     async def on_submit(self, interaction: Interaction) -> None:
-        channel_id = await self.vs.verification_settings_store.get_request_channel_id(interaction.guild_id)
-        channel = interaction.guild.get_channel(channel_id)
+        # Get the verification channel.
+        request_channel_id = await self.vs.verification_settings_store.get_request_channel_id(interaction.guild_id)
+        request_channel = interaction.guild.get_channel(request_channel_id)
 
-        await channel.send(content=f'age-range: {self.age_range}\n'
-                                   f'gender: {self.gender}\n'
-                                   f'join-reason: {self.join_reason_text_input.value}\n'
-                                   f'additional info: {self.additional_info_text_input.value}')
+        # Open a new user verification request in the database.
+        verification_request = await self.vs.verification_request_store.create(
+            guild_id=interaction.guild_id,
+            user_id=interaction.user.id,
+            welcome_message_id=self.welcome_message.id,
+        )
 
+        # Create the verification notification embed.
+        description = f'User {interaction.user.mention} wants to be verified. They provided the following information.'
+        embed = Embed(title='Verification Request', description=description, color=discord.Color.blue(),
+                      timestamp=datetime.now(timezone.utc))
+        embed.add_field(name='age range', value=self.age_range)
+        embed.add_field(name='gender', value=self.gender)
+        embed.add_field(name='join reason', value=self.join_reason_text_input.value)
+        embed.add_field(name='additional info', value=self.additional_info_text_input.value)
+        embed.set_author(name=tools.user_string(interaction.user),
+                         url=f'https://discordapp.com/users/{interaction.user.id}',
+                         icon_url=interaction.user.display_avatar)
+        file = discord.File(self.vs.bot.img_dir / 'accept_reject.png', filename='image.png')
+        embed.set_thumbnail(url='attachment://image.png')
+
+        # Create the verification notification view.
+        verification_notification_view = VerificationNotificationView(verification_system=self.vs,
+                                                                      verification_request=verification_request)
+
+        # Send the embed and view to the verification request channel.
+        await request_channel.send(embed=embed, file=file, view=verification_notification_view)
+
+        # Edit the original verification request button to show that verification is pending.
         view = VerificationRequestView(verification_system=self.vs)
         button = view.children[0]
         button.disabled = True
-        button.label = 'Verification Pending . . .'
+        button.label = 'Verification pending ...'
         await self.welcome_message.edit(view=view)
 
+        # Let the user know that the staff has been notified.
         await interaction.response.send_message(
             f'Thanks for your response, {interaction.user.mention}! The staff has been notified.',
             ephemeral=True,
         )
 
 
-# class TicketNotificationView(ui.View):
-#     """Notifies the staff about a new ticket request and lets them accept or reject it.
-#     In the first case, creates a new channel. In both cases, notifies the user about the staff decision."""
-#
-#     def __init__(self, ticket_system: TicketSystem, ticket_request: TicketRequest) -> None:
-#         super().__init__(timeout=None)
-#         self.ts = ticket_system
-#         self.ticket_request = ticket_request
-#         self.lock = asyncio.Lock()
-#         self.accept_button = ui.Button(label='Accept', style=ButtonStyle.green, emoji=emojize(':check_mark_button:'),
-#                                        custom_id=f'accept_ticket_request#{self.ticket_request.id}')
-#         self.reject_button = ui.Button(label='Reject', style=ButtonStyle.blurple, emoji=emojize(':bell_with_slash:'),
-#                                        custom_id=f'reject_ticket_request#{self.ticket_request.id}')
-#         self.accept_button.callback = self.accept_ticket_request
-#         self.reject_button.callback = self.reject_ticket_request
-#         self.add_item(self.accept_button)
-#         self.add_item(self.reject_button)
-#
-#     async def interaction_check(self, interaction: Interaction) -> bool:
-#         if interaction.user.guild_permissions.manage_channels:
-#             return True
-#         else:
-#             await interaction.response.send_message('You are not allowed to do this action!')
-#             return False
-#
-#     async def accept_ticket_request(self, interaction: Interaction) -> None:
-#         # The lock and `is_finished()` call ensure that the view is only responded to once.
-#         async with self.lock:
-#             if self.is_finished():
-#                 return
-#
-#             # Stop listening to the view and deactivate it.
-#             self.stop()
-#             self.remove_item(self.reject_button)
-#             self.accept_button.label = f'{self.accept_button.label}ed'
-#             self.accept_button.disabled = True
-#             await interaction.response.edit_message(view=self)
-#
-#             # Create the ticket.
-#             ticket = await self.ts.ticket_store.create(
-#                 self.ticket_request.guild_id,
-#                 self.ticket_request.user_id,
-#                 self.ticket_request.reason
-#             )
-#
-#             # Create the ticket text channel and set permissions accordingly.
-#             channel = await interaction.guild.create_text_channel(
-#                 f'Ticket #{ticket.id}',
-#                 category=interaction.channel.category,
-#                 reason=f'create ticket for user {tools.user_string(interaction.user)}',
-#             )
-#             await channel.set_permissions(
-#                 interaction.guild.get_member(ticket.user_id),
-#                 read_messages=True,
-#                 send_messages=True
-#             )
-#
-#             # Update the ticket with the channel id.
-#             await self.ts.ticket_store.set_channel(ticket=ticket, channel_id=channel.id)
-#
-#             # Describe why this channel was opened.
-#             ticket_user = self.ts.bot.get_user(ticket.user_id)
-#             description = f'This ticket has been created at the request of {ticket_user.mention}. '
-#             if ticket.reason:
-#                 description += f'They wanted to talk about the following:\n{tools.quote_message(ticket.reason)}\n\n'
-#             description += 'To close this ticket use `/ticket close`. ' \
-#                            'To add another user to the ticket use `/ticket adduser <@user>`.'
-#             embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=Color.yellow(),
-#                           timestamp=datetime.now(timezone.utc))
-#             file = discord.File(self.ts.bot.img_dir / 'accepted_ticket.png', filename='image.png')
-#             embed.set_thumbnail(url='attachment://image.png')
-#             await channel.send(embed=embed, file=file)
-#
-#             # Store the decision to accept the ticket in the database.
-#             await self.ts.ticket_request_store.accept(ticket_request=self.ticket_request, ticket=ticket)
-#
-#             # Notify the user that the action is complete and a channel has been created.
-#             await interaction.followup.send(
-#                 f'{interaction.user.mention} accepted the ticket request. '
-#                 f'Therefore, a channel has been created at {channel.mention}.',
-#                 ephemeral=False
-#             )
-#
-#             # Edit the original embed.
-#             original_response = await interaction.original_response()
-#             embed = original_response.embeds[0]
-#             embed.title += ' [ACCEPTED]'
-#             embed.colour = Color.yellow()
-#             file = discord.File(self.ts.bot.img_dir / 'accepted_ticket.png', filename='image.png')
-#             embed.set_thumbnail(url='attachment://image.png')
-#             await original_response.edit(embed=embed, attachments=[file])
-#
-#     async def reject_ticket_request(self, interaction: Interaction) -> None:
-#         # The lock and `is_finished()` call ensure that the view is only responded to once.
-#         async with self.lock:
-#             if self.is_finished():
-#                 return
-#
-#             # Stop listening to the view and deactivate it.
-#             self.stop()
-#             self.remove_item(self.accept_button)
-#             self.reject_button.label = f'{self.reject_button.label}ed'
-#             self.reject_button.disabled = True
-#             await interaction.response.edit_message(view=self)
-#
-#             # Create the ticket text channel and set permissions accordingly.
-#             # NOTE: Even though the ticket was rejected, we create a channel to notify the user of this decision.
-#             category: CategoryChannel = interaction.channel.category
-#             channel = await interaction.guild.create_text_channel(
-#                 f'Rejected #{self.ticket_request.id}',
-#                 category=category,
-#                 reason=f'reject ticket for user {interaction.user.id}',
-#             )
-#             await channel.set_permissions(
-#                 interaction.guild.get_member(self.ticket_request.user_id),
-#                 read_messages=True,
-#                 send_messages=False
-#             )
-#
-#             # Store the decision to reject the ticket in the database.
-#             await self.ts.ticket_request_store.reject(self.ticket_request)
-#
-#             # Update the ticket request with the channel id.
-#             await self.ts.ticket_request_store.set_channel(ticket_request=self.ticket_request, channel_id=channel.id)
-#
-#             # Describe why this channel was opened.
-#             user = self.ts.bot.get_user(self.ticket_request.user_id)
-#             description = f'The ticket created at the request of {user.mention} has been ' \
-#                           '__**rejected**__. Therefore, this channel only serves to inform them of this ' \
-#                           'decision. It will be auto-deleted in ~24 hours. '
-#             if self.ticket_request.reason:
-#                 description += 'Originally, the user wanted to talk about the following:\n' \
-#                                f'{tools.quote_message(self.ticket_request.reason)}\n\n'
-#             description += 'To close this channel use `/ticket close`. ' \
-#                            'To add another user to the channel use `/ticket adduser <@user>`.'
-#             embed = Embed(title=f'Ticket Request #{self.ticket_request.id} [REJECTED]',
-#                           description=description,
-#                           color=Color.red(),
-#                           timestamp=datetime.now(timezone.utc))
-#             file = discord.File(self.ts.bot.img_dir / 'rejected_ticket.png', filename='image.png')
-#             embed.set_thumbnail(url='attachment://image.png')
-#             await channel.send(embed=embed, file=file)
-#
-#             # Store the decision to reject the ticket request in the database and apply a cooldown to the user.
-#             await self.ts.ticket_request_store.reject(ticket_request=self.ticket_request)
-#             cooldown_in_secs = await self.ts.ticket_settings_store.get_guild_cooldown(guild_id=interaction.guild_id)
-#             await self.ts.ticket_cooldown_store.set_user_cooldown(
-#                 guild_id=interaction.guild_id,
-#                 user_id=interaction.user.id,
-#                 cooldown_in_secs=cooldown_in_secs
-#             )
-#
-#             # Notify the user that the action is complete and a channel has been created.
-#             await interaction.followup.send(
-#                 f'{interaction.user.mention} rejected the ticket request. '
-#                 f'Therefore, a channel has been created at {channel.mention}.',
-#                 ephemeral=False
-#             )
-#
-#             # Edit the original embed.
-#             original_response = await interaction.original_response()
-#             embed = original_response.embeds[0]
-#             embed.title += ' [REJECTED]'
-#             embed.colour = Color.red()
-#             file = discord.File(self.ts.bot.img_dir / 'rejected_ticket.png', filename='image.png')
-#             embed.set_thumbnail(url='attachment://image.png')
-#             await original_response.edit(embed=embed, attachments=[file])
+class VerificationNotificationView(ui.View):
+    """Notifies the staff about a new ticket request and lets them accept or reject it.
+    In the first case, creates a new channel. In both cases, notifies the user about the staff decision."""
+
+    def __init__(self, verification_system: VerificationSystem, verification_request: VerificationRequest) -> None:
+        super().__init__(timeout=None)
+        self.vs = verification_system
+        self.verification_request = verification_request
+        self.lock = asyncio.Lock()
+        self.message: Optional[Message] = None
+        self.accept_button = ui.Button(label='Accept', style=ButtonStyle.green, emoji=emojize(':check_mark_button:'),
+                                       custom_id=f'accept_verification_request#{self.verification_request.id}')
+        self.reject_button = ui.Button(label='Reject', style=ButtonStyle.blurple, emoji=emojize(':no_entry:'),
+                                       custom_id=f'reject_verification_request#{self.verification_request.id}')
+        self.accept_button.callback = self.accept_verification_request
+        self.reject_button.callback = self.reject_verification_request
+        self.add_item(self.accept_button)
+        self.add_item(self.reject_button)
+
+    async def interaction_check(self, interaction: Interaction) -> bool:
+        if interaction.user.guild_permissions.manage_roles and interaction.user.guild_permissions.kick_members:
+            return True
+        else:
+            await interaction.response.send_message('You are not allowed to do this action!')
+            return False
+
+    async def accept_verification_request(self, interaction: Interaction) -> None:
+        # The lock and `is_finished()` call ensure that the view is only responded to once.
+        async with self.lock:
+            if self.is_finished():
+                return
+
+            # Assign the verification role to the user.
+            # TODO Assign the other roles (gender and age range).
+            member = interaction.guild.get_member(self.verification_request.user_id)
+            role_id = await self.vs.verification_settings_store.get_role_id(interaction.guild_id)
+            role = interaction.guild.get_role(role_id)
+            await member.add_roles(role, reason='verify the user')
+
+            # Store the decision to verify the user in the database.
+            await self.vs.verification_request_store.close(self.verification_request, True)
+
+            # Welcome the user with additional information in the verified welcome channel.
+            verified_welcome_channel_id = await self.vs.verification_settings_store.get_verified_welcome_channel_id(
+                interaction.guild_id
+            )
+            verified_welcome_channel = interaction.guild.get_channel(verified_welcome_channel_id)
+            verified_welcome_message = await self.vs.verification_settings_store.get_verified_welcome_message(
+                interaction.guild_id
+            )
+            description = verified_welcome_message.replace('<user>', member.mention)
+            embed = Embed(title=f'Welcome to {interaction.guild.name}!',
+                          description=description,
+                          color=discord.Color.green(),
+                          timestamp=datetime.now(timezone.utc))
+            embed.set_author(name=tools.user_string(interaction.user),
+                             url=f'https://discordapp.com/users/{interaction.user.id}',
+                             icon_url=interaction.user.display_avatar)
+            welcome_filename = random.choice(['welcome1.png', 'welcome2.png'])
+            file = discord.File(self.vs.bot.img_dir / welcome_filename, filename='image.png')
+            embed.set_thumbnail(url='attachment://image.png')
+            await verified_welcome_channel.send(embed=embed, file=file)
+
+            # Remove the welcome message from the first welcome channel.
+            # At this point, if it does not exist, we do not care.
+            welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
+                guild_id=interaction.guild_id
+            )
+            welcome_channel = self.vs.bot.get_channel(welcome_channel_id)
+            welcome_message = await welcome_channel.fetch_message(self.verification_request.welcome_message_id)
+            if welcome_message is not None:
+                await welcome_message.delete()
+
+            # Stop listening to the view and deactivate it.
+            self.stop()
+            self.remove_item(self.reject_button)
+            self.accept_button.label = f'{self.accept_button.label}ed'
+            self.accept_button.disabled = True
+
+            # Edit the original verification notification embed.
+            embed = interaction.message.embeds[0]
+            embed.title += ' [ACCEPTED]'
+            embed.colour = discord.Color.green()
+            file = discord.File(self.vs.bot.img_dir / 'accepted_verification_request.png', filename='image.png')
+            embed.set_thumbnail(url='attachment://image.png')
+
+            # Send the edited embed and view.
+            await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
+            await interaction.followup.send(
+                f"{interaction.user.mention} accepted {member.mention}'s verification request!"
+            )
+
+    async def reject_verification_request(self, interaction: Interaction) -> None:
+        # The lock and `is_finished()` call ensure that the view is only responded to once.
+        async with self.lock:
+            if self.is_finished():
+                return
+
+            self.message = interaction.message
+
+            # Ask for confirmation and a reason to kick the user.
+            confirm_kick_modal = ConfirmKickModal(verification_system=self.vs,
+                                                  verification_request=self.verification_request,
+                                                  verification_notification_view=self)
+            await interaction.response.send_modal(confirm_kick_modal)
+
+
+class ConfirmKickModal(ui.Modal, title='Kick the user?'):
+    """Asks the staff member to confirm if they want to reject the verification request and kick the user."""
+
+    def __init__(self, verification_system: VerificationSystem, verification_request: VerificationRequest,
+                 verification_notification_view: VerificationNotificationView) -> None:
+        super().__init__()
+        self.vs = verification_system
+        self.verification_request = verification_request
+        self.verification_notification_view = verification_notification_view
+        self.kick_reason_text_input = ui.TextInput(
+            label='Kick Reason',
+            placeholder='Describe why the user cannot be verified and will be kicked.',
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=500
+        )
+        self.add_item(self.kick_reason_text_input)
+
+    async def on_submit(self, interaction: Interaction) -> None:
+        # Kick the user.
+        user_id = self.verification_request.user_id
+        member = interaction.guild.get_member(user_id)
+        # await member.kick(reason=self.kick_reason_text_input.value) # TODO
+
+        # Store the decision to not verify the user in the database.
+        await self.vs.verification_request_store.close(self.verification_request, False)
+
+        # Remove the welcome message from the first welcome channel.
+        # At this point, if it does not exist, we do not care.
+        welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
+            guild_id=interaction.guild_id
+        )
+        welcome_channel = self.vs.bot.get_channel(welcome_channel_id)
+        welcome_message = await welcome_channel.fetch_message(self.verification_request.welcome_message_id)
+        if welcome_message is not None:
+            await welcome_message.delete()
+
+        # Modify verification notification message.
+        # The lock and `is_finished()` call ensure that the view is only responded to once.
+        async with self.verification_notification_view.lock:
+            if self.is_finished():
+                return
+
+            # Stop listening to the view and deactivate it.
+            self.stop()
+            self.verification_notification_view.remove_item(self.verification_notification_view.accept_button)
+            reject_button_label = self.verification_notification_view.reject_button.label
+            self.verification_notification_view.reject_button.label = f'{reject_button_label}ed'
+            self.verification_notification_view.reject_button.disabled = True
+
+            # Edit the original verification notification embed.
+            embed = self.verification_notification_view.message.embeds[0]
+            embed.title += ' [REJECTED]'
+            embed.colour = discord.Color.red()
+            file = discord.File(self.vs.bot.img_dir / 'rejected_verification_request.png', filename='image.png')
+            embed.set_thumbnail(url='attachment://image.png')
+
+            # Send the edited embed and view.
+            await self.verification_notification_view.message.edit(embed=embed,
+                                                                   attachments=[file],
+                                                                   view=self.verification_notification_view)
+            await interaction.response.send_message(
+                f"{interaction.user.mention} rejected {member.mention}'s verification request! "
+                "They were subsequently kicked."
+            )
 
 
 async def setup(bot: SlimBot) -> None:
