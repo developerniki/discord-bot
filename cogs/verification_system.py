@@ -601,9 +601,6 @@ class VerificationNotificationView(ui.View):
 
             # Remove the welcome message from the first welcome channel.
             # At this point, if it does not exist, we do not care.
-            welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
-                guild_id=interaction.guild_id
-            )
             welcome_channel_id = self.verification_request.welcome_channel_id
             welcome_channel = self.vs.bot.get_channel(welcome_channel_id)
             welcome_message = await welcome_channel.fetch_message(self.verification_request.welcome_message_id)
