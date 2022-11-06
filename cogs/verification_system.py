@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import random
 import re
 import time
 from datetime import datetime, timezone
@@ -74,7 +73,9 @@ class VerificationSystem(commands.GroupCog, name='verify'):
                           'please click on the button below and complete the verification process.'
             embed = Embed(title='Verification Request', description=description,
                           color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
-            await welcome_channel.send(embed=embed, view=verification_request_view)
+            file = discord.File(self.bot.img_dir / 'welcome1.png', filename='image.png')
+            embed.set_thumbnail(url='attachment://image.png')
+            await welcome_channel.send(embed=embed, file=file, view=verification_request_view)
 
     @commands.hybrid_command()
     @commands.has_guild_permissions(manage_roles=True)
@@ -106,7 +107,9 @@ class VerificationSystem(commands.GroupCog, name='verify'):
                           'please click on the button below and complete the verification process.'
             embed = Embed(title='Verification Request', description=description,
                           color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
-            await ctx.send(embed=embed, view=verification_request_view)
+            file = discord.File(self.bot.img_dir / 'welcome1.png', filename='image.png')
+            embed.set_thumbnail(url='attachment://image.png')
+            await ctx.send(embed=embed, file=file, view=verification_request_view)
 
     @commands.hybrid_command()
     @commands.has_guild_permissions(manage_channels=True)
@@ -188,7 +191,7 @@ class VerificationSystem(commands.GroupCog, name='verify'):
 
     @commands.hybrid_command()
     @commands.has_guild_permissions(manage_channels=True)
-    async def set_verified_welcome_channel(self, ctx: commands.Context, message: str) -> None:
+    async def set_verified_welcome_message(self, ctx: commands.Context, message: str) -> None:
         """Set the verified welcome message used to welcome verified users."""
         await self.verification_settings_store.set_verified_welcome_message(guild_id=ctx.guild.id, message=message)
         await ctx.send(f'The verified welcome message has been set to `{message}`.', ephemeral=True)
@@ -233,11 +236,13 @@ class VerificationSystem(commands.GroupCog, name='verify'):
 class VerificationRequest:
     """The in-memory representation of a user verification in the database."""
 
-    def __init__(self, user_verification_id: int, guild_id: int, user_id: int, welcome_message_id: int, verified: bool,
+    def __init__(self, user_verification_id: int, guild_id: int, user_id: int, welcome_channel_id: int,
+                 welcome_message_id: int, verified: bool,
                  joined_at: int, closed_at: Optional[int]) -> None:
         self.id = user_verification_id
         self.guild_id = guild_id
         self.user_id = user_id
+        self.welcome_channel_id = welcome_channel_id
         self.welcome_message_id = welcome_message_id
         self.verified = verified
         self.joined_at = joined_at
@@ -292,18 +297,27 @@ class VerificationRequestStore(BaseStore):
     def __init__(self, db_loc: str) -> None:
         super().__init__(db_loc)
 
-    async def create(self, guild_id: int, user_id: int, welcome_message_id: int) -> VerificationRequest:
+    async def create(self, guild_id: int, user_id: int, welcome_channel_id: int,
+                     welcome_message_id: int) -> VerificationRequest:
         async with aiosqlite.connect(self.db_loc) as con:
             statement = """INSERT INTO
-                        VerificationRequests(guild_id, user_id, welcome_message_id, verified, joined_at)
-                        VALUES (?, ?, ?, FALSE, ?)
+                        VerificationRequests(
+                            guild_id,
+                            user_id,
+                            welcome_channel_id,
+                            welcome_message_id,
+                            verified,
+                            joined_at
+                        )
+                        VALUES (?, ?, ?, ?, FALSE, ?)
                         """
             joined_at = tools.unix_seconds_from_discord_snowflake_id(welcome_message_id)
-            cur = await con.execute(statement, (guild_id, user_id, welcome_message_id, joined_at))
+            cur = await con.execute(statement, (guild_id, user_id, welcome_channel_id, welcome_message_id, joined_at))
             await con.commit()
             user_verification = VerificationRequest(user_verification_id=cur.lastrowid, guild_id=guild_id,
-                                                    user_id=user_id, welcome_message_id=welcome_message_id,
-                                                    verified=False, joined_at=joined_at, closed_at=None)
+                                                    user_id=user_id, welcome_channel_id=welcome_channel_id,
+                                                    welcome_message_id=welcome_message_id, verified=False,
+                                                    joined_at=joined_at, closed_at=None)
             return user_verification
 
     async def close(self, verification_request: VerificationRequest, verified: bool) -> None:
@@ -324,12 +338,14 @@ class VerificationRequestStore(BaseStore):
                     user_verification_id=user_verification_id,
                     guild_id=guild_id,
                     user_id=user_id,
+                    welcome_channel_id=welcome_channel_id,
                     welcome_message_id=welcome_message_id,
                     verified=verified,
                     joined_at=joined_at,
                     closed_at=closed_at
                 )
-                for user_verification_id, guild_id, user_id, welcome_message_id, verified, joined_at, closed_at
+                for
+                user_verification_id, guild_id, user_id, welcome_channel_id, welcome_message_id, verified, joined_at, closed_at
                 in verification_requests_raw
             ]
             return verification_requests
@@ -482,6 +498,7 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         verification_request = await self.vs.verification_request_store.create(
             guild_id=interaction.guild_id,
             user_id=interaction.user.id,
+            welcome_channel_id=self.welcome_message.channel.id,
             welcome_message_id=self.welcome_message.id,
         )
 
@@ -578,8 +595,7 @@ class VerificationNotificationView(ui.View):
             embed.set_author(name=tools.user_string(interaction.user),
                              url=f'https://discordapp.com/users/{interaction.user.id}',
                              icon_url=interaction.user.display_avatar)
-            welcome_filename = random.choice(['welcome1.png', 'welcome2.png'])
-            file = discord.File(self.vs.bot.img_dir / welcome_filename, filename='image.png')
+            file = discord.File(self.vs.bot.img_dir / 'welcome2.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             await verified_welcome_channel.send(embed=embed, file=file)
 
@@ -588,6 +604,7 @@ class VerificationNotificationView(ui.View):
             welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
                 guild_id=interaction.guild_id
             )
+            welcome_channel_id = self.verification_request.welcome_channel_id
             welcome_channel = self.vs.bot.get_channel(welcome_channel_id)
             welcome_message = await welcome_channel.fetch_message(self.verification_request.welcome_message_id)
             if welcome_message is not None:
@@ -660,9 +677,10 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
             guild_id=interaction.guild_id
         )
         welcome_channel = self.vs.bot.get_channel(welcome_channel_id)
-        welcome_message = await welcome_channel.fetch_message(self.verification_request.welcome_message_id)
-        if welcome_message is not None:
-            await welcome_message.delete()
+        if welcome_channel is not None:
+            welcome_message = await welcome_channel.fetch_message(self.verification_request.welcome_message_id)
+            if welcome_message is not None:
+                await welcome_message.delete()
 
         # Modify verification notification message.
         # The lock and `is_finished()` call ensure that the view is only responded to once.
