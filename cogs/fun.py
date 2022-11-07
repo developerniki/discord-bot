@@ -48,7 +48,8 @@ class Fun(commands.Cog, name='fun'):
 
         for pattern_action in self.pattern_to_action:
             if pattern_action.match_lower(message.content):
-                _logger.info(f'Found pattern in message {message.content} by user {tools.user_string(message.author)}.')
+                _logger.info(f'Found pattern in message "{message.content}" by user '
+                             f'{tools.user_string(message.author)}.')
                 reaction = pattern_action.random_reaction()
                 response = pattern_action.random_response()
                 if reaction is not None:
