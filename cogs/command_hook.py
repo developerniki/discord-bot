@@ -12,7 +12,7 @@ _logger = logging.getLogger(__name__)
 class CommandHook(commands.Cog, name='command_hook'):
     """Logs the commands being used and handles command errors."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     @commands.Cog.listener()
@@ -69,5 +69,5 @@ class CommandHook(commands.Cog, name='command_hook'):
         _logger.info(f'{tools.user_string(ctx.author)} used `{self.__command_string(ctx)}` (completed).')
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(CommandHook(bot))

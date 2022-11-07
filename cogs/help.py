@@ -9,12 +9,12 @@ from main import SlimBot
 class Help(commands.Cog, name='help'):
     """A help message cog."""
 
-    def __init__(self, bot: SlimBot):
+    def __init__(self, bot: SlimBot) -> None:
         self.bot = bot
         self.bot.remove_command('help')
 
     @commands.hybrid_command()
-    async def help(self, ctx: commands.Context, cog: Optional[str]):
+    async def help(self, ctx: commands.Context, cog: Optional[str]) -> None:
         """Shows all bot modules."""
         if cog is None:
             embed = discord.Embed(title='Commands & Modules',
@@ -60,5 +60,5 @@ class Help(commands.Cog, name='help'):
         await ctx.send(embed=embed, ephemeral=True)
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(Help(bot))
