@@ -53,8 +53,10 @@ class SlimBot(commands.Bot):
         self.core_store = CoreStore(self.db_loc)
 
         async def command_prefix(bot: commands.Bot, message: discord.Message):
-            guild_prefix = await self.core_store.get_command_prefix(message.guild.id)
-            prefixes = (guild_prefix, bot.user.name + ' ')
+            prefixes = [bot.user.name + ' ']
+            if message.guild is not None:
+                guild_prefix = await self.core_store.get_command_prefix(message.guild.id)
+                prefixes.append(guild_prefix)
             return commands.when_mentioned_or(*prefixes)(bot, message)
 
         super().__init__(command_prefix=command_prefix, intents=intents, case_insensitive=True)
