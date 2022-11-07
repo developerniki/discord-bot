@@ -29,6 +29,8 @@ async def fetch_from_api(url: str, key: str, default: str, from_list: bool = Fal
     url -- the URL to fetch
     key -- the key of the desired value
     default -- return this if the request failed or returned None or an empty string
+
+    Keyword arguments:
     from_list -- whether the content is wrapped in a list (default: False)
     """
     async with aiohttp.ClientSession() as session:

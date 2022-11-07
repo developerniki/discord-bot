@@ -77,7 +77,8 @@ class Fun(commands.Cog, name='fun'):
 class PatternToAction:
     def __init__(self, pattern: str, reactions: List[str], responses: List[str]) -> None:
         """Represents a pattern and the possible emoji reactions and text responses that can be taken by the bot.
-        If the pattern is invalid, raises `re.error`."""
+        If the pattern is invalid, raises `re.error`.
+        """
         pattern = pattern.replace('\\\\', '\\')  # For some reason, the toml library doesn't do this itself.
         pattern = demojize(pattern)  # Some emojis have multiple unicode representations, so convert to text.
         pattern = pattern.replace('<mention>', r'!?(<@\d+>,? ?)')
@@ -86,18 +87,21 @@ class PatternToAction:
         self.responses = [emojize(response) for response in responses]
 
     def match_lower(self, string: str) -> bool:
-        """Returns whether `string` matches the pattern. The check is case-insensitive."""
+        """Returns whether `string` matches the pattern. The check is case-insensitive.
+        """
         string = demojize(string)  # Some emojis have multiple unicode representations, so convert to text.
         return bool(self.pattern.match(string.lower()))
 
     def random_reaction(self) -> Optional[str]:
         """Returns a random reaction from the list of possible reactions.
-        If there are no reactions to choose from, returns `None`."""
+        If there are no reactions to choose from, returns `None`.
+        """
         return random.choice(self.reactions) if self.reactions else None
 
     def random_response(self) -> Optional[str]:
         """Returns a random response from the list of possible responses.
-        If there are no responses to choose from, returns `None`."""
+        If there are no responses to choose from, returns `None`.
+        """
         return random.choice(self.responses) if self.responses else None
 
 
@@ -124,7 +128,8 @@ async def fetch_insult() -> str:
 
 async def fetch_insult_filter_you(max_retries=10) -> str:
     """Fetch an insult from the evilinsult.com API until a response contains the word 'you'. Tries at most ten times.
-    Set `max_retries` to 0 to query the API an indefinite number of times."""
+    Set `max_retries` to 0 to query the API an indefinite number of times.
+    """
     insult = ''
     while 'you' not in insult.lower() and max_retries > 0:
         insult = await fetch_insult()
