@@ -96,7 +96,7 @@ class SlimBot(commands.Bot):
         # Make prefix case-insensitive.
         prefixes = await self.get_prefix(message)
         if isinstance(prefixes, str):
-            prefixes = []
+            prefixes = [prefixes]
 
         for prefix in prefixes:
             if message.content.lower().startswith(prefix.lower()):
