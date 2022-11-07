@@ -36,6 +36,9 @@ class TicketSystem(commands.GroupCog, name='ticket'):
             ticket_request_view = TicketRequestView(self)
             self.bot.add_view(ticket_request_view)
 
+            ticket_request_modal = TicketRequestModal(self)
+            self.bot.add_view(ticket_request_modal)
+
             pending_ticket_requests = await self.ticket_request_store.get_pending()
             for ticket_request in pending_ticket_requests:
                 ticket_notification_view = TicketNotificationView(ticket_system=self, ticket_request=ticket_request)
@@ -709,13 +712,14 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
     """Asks the user for a description of what they want to talk about and notifies the staff."""
 
     def __init__(self, ticket_system: TicketSystem) -> None:
-        super().__init__()
+        super().__init__(timeout=None, custom_id='request_ticket_modal')
         self.ts = ticket_system
         self.reason_txt_input = ui.TextInput(
             label='What do you want to talk about (optional)?',
             style=discord.TextStyle.paragraph,
             required=False,
-            max_length=2000
+            max_length=2000,
+            custom_id='request_ticket_text_input'
         )
         self.add_item(self.reason_txt_input)
 
