@@ -5,6 +5,7 @@ from typing import Any
 import aiosqlite
 import discord
 import toml
+from discord import Message
 from discord.ext import commands
 
 _logger = logging.getLogger(__name__)
@@ -53,15 +54,10 @@ class SlimBot(commands.Bot):
 
         async def command_prefix(bot: commands.Bot, message: discord.Message):
             guild_prefix = await self.core_store.get_command_prefix(message.guild.id)
-            prefixes = (
-                guild_prefix,
-                bot.user.name + ' ',
-                bot.user.name.lower() + ' ',
-                bot.user.name[0].upper() + bot.user.name[1:] + ' ',
-            )
+            prefixes = (guild_prefix, bot.user.name + ' ')
             return commands.when_mentioned_or(*prefixes)(bot, message)
 
-        super().__init__(command_prefix=command_prefix, intents=intents)
+        super().__init__(command_prefix=command_prefix, intents=intents, case_insensitive=True)
 
     async def do_migrations(self) -> None:
         """Do the database migrations by creating all the tables and moving the default settings to the DefaultSettings
@@ -95,6 +91,19 @@ class SlimBot(commands.Bot):
 
     async def on_ready(self) -> None:
         _logger.info(f'The bot has logged in as {self.user}!')
+
+    async def on_message(self, message: Message) -> None:
+        # Make prefix case-insensitive.
+        prefixes = await self.get_prefix(message)
+        if isinstance(prefixes, str):
+            prefixes = []
+
+        for prefix in prefixes:
+            if message.content.lower().startswith(prefix.lower()):
+                message.content = prefix + message.content[len(prefix):]
+                break
+
+        await self.process_commands(message)
 
 
 class Core(commands.Cog, name='core'):
