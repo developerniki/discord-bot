@@ -18,8 +18,8 @@ hug_links = [
 reactions = [":sun:"]
 responses = ["Good morning to you, too!"]
 
-[patterns."<mention>?(, )?(g(ood )?night|sleep well|gn|gnite)(?!\\S)"]
-reactions = [":sleeping_face:", ":crescent_moon:"]
+[patterns."<mention>?(, )?(g(ood )?night|sleep well|gn|gnite|night)(?!\\S)"]
+reactions = [":sleeping_face:", ":crescent_moon:", ':ZZZ:', ':yawning_face:']
 responses = ["Sweet dreams! ~", "Good nighty! :relieved_face:"]
 
 [patterns."<mention>?(, )?(hello|hi|sup|what'?s up)(?!\\S)"]
