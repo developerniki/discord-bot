@@ -5,7 +5,6 @@ from typing import Any
 import aiosqlite
 import discord
 import toml
-from discord import Message
 from discord.ext import commands
 
 _logger = logging.getLogger(__name__)
@@ -57,6 +56,10 @@ class SlimBot(commands.Bot):
             if message.guild is not None:
                 guild_prefix = await self.core_store.get_command_prefix(message.guild.id)
                 prefixes.append(guild_prefix)
+
+            prefixes = [message.content[:len(prefix)] if message.content.lower().startswith(prefix.lower())
+                        else prefix for prefix in prefixes]
+
             return commands.when_mentioned_or(*prefixes)(bot, message)
 
         super().__init__(command_prefix=command_prefix, intents=intents, case_insensitive=True)
@@ -93,19 +96,6 @@ class SlimBot(commands.Bot):
 
     async def on_ready(self) -> None:
         _logger.info(f'The bot has logged in as {self.user}!')
-
-    async def on_message(self, message: Message) -> None:
-        # Make prefix case-insensitive.
-        prefixes = await self.get_prefix(message)
-        if isinstance(prefixes, str):
-            prefixes = [prefixes]
-
-        for prefix in prefixes:
-            if message.content.lower().startswith(prefix.lower()):
-                message.content = prefix + message.content[len(prefix):]
-                break
-
-        await self.process_commands(message)
 
 
 class Core(commands.Cog, name='core'):
