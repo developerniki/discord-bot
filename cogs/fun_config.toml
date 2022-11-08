@@ -1,7 +1,7 @@
 hug_links = [
     "https://tenor.com/view/cat-hugs-alydn-gif-26454086",
     "https://tenor.com/view/hug-love-hi-bye-cat-gif-15999080",
-    "https://tenor.com/view/covid-meme-cute-gif-23513805,",
+    "https://tenor.com/view/covid-meme-cute-gif-23513805",
     "https://tenor.com/view/dog-gif-25785273",
     "https://tenor.com/view/lick-kiss-smooch-affection-dog-gif-16669611",
     "https://tenor.com/view/polar-bear-baby-hug-gif-26055063",
@@ -22,12 +22,12 @@ responses = ["Good morning to you, too!"]
 reactions = [":sleeping_face:", ":crescent_moon:", ':ZZZ:', ':yawning_face:']
 responses = ["Sweet dreams! ~", "Good nighty! :relieved_face:"]
 
-[patterns."<mention>?(, )?(hello|hi|sup|what'?s up)(?!\\S)"]
+[patterns."<mention>?(, )?(hello|hi|sup|what'?s up\\?)(?!\\S)"]
 reactions = []
 responses = [
     "What's up? :smiling_face_with_sunglasses:",
     "Hi! :waving_hand:",
-    "G'day, Sir. :face_with_monocle:",
+    "Hello!",
     "Hey! :waving_hand:",
     "How's it going?"
 ]
