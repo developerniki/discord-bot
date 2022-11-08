@@ -3,6 +3,7 @@ import logging
 import re
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, List
 
 import aiosqlite
@@ -11,8 +12,8 @@ from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, Sel
 from discord.ext import commands
 from emoji import emojize
 
-import tools
-from main import SlimBot, BaseStore
+from slimbot import SlimBot, tools
+from slimbot.store import BaseStore
 
 _logger = logging.getLogger(__name__)
 
@@ -24,8 +25,8 @@ class VerificationSystem(commands.GroupCog, name='verify'):
         self.bot = bot
         self._views_added = False
 
-        self.verification_settings_store = VerificationSettingStore(self.bot.db_loc)
-        self.verification_request_store = VerificationRequestStore(self.bot.db_loc)
+        self.verification_settings_store = VerificationSettingStore(self.bot.config.db_file)
+        self.verification_request_store = VerificationRequestStore(self.bot.config.db_file)
         self._views_added = False
 
     @commands.Cog.listener()
@@ -70,6 +71,8 @@ class VerificationSystem(commands.GroupCog, name='verify'):
             _logger.warning('One of the necessary settings is not configured/not configured properly for the '
                             'verification system to work!')
             return
+        elif member.bot:
+            _logger.info(f'{tools.user_string(member)} is a bot, so not making a verification button.')
         else:
             _logger.info(f'Making a verification button for {tools.user_string(member)}.')
             verification_request_view = VerificationRequestView(self)
@@ -77,7 +80,7 @@ class VerificationSystem(commands.GroupCog, name='verify'):
                           'please click on the button below and complete the verification process.'
             embed = Embed(title=f'Welcome to {member.guild.name}!', description=description,
                           color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
-            file = discord.File(self.bot.img_dir / 'welcome1.png', filename='image.png')
+            file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             await welcome_channel.send(embed=embed, file=file, view=verification_request_view)
 
@@ -111,7 +114,7 @@ class VerificationSystem(commands.GroupCog, name='verify'):
                           'please click on the button below and complete the verification process.'
             embed = Embed(title=f'Welcome to {ctx.guild.name}!', description=description,
                           color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
-            file = discord.File(self.bot.img_dir / 'welcome1.png', filename='image.png')
+            file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             await ctx.send(embed=embed, file=file, view=verification_request_view)
 
@@ -256,8 +259,8 @@ class VerificationRequest:
 class VerificationSettingStore(BaseStore):
     """Handles database access with the `Settings` table for settings related to the verification system."""
 
-    def __init__(self, db_loc: str) -> None:
-        super().__init__(db_loc)
+    def __init__(self, db_file: Path) -> None:
+        super().__init__(db_file)
 
     async def get_welcome_channel_id(self, guild_id: int) -> int:
         channel_id = await self.get_setting(guild_id, 'welcome_channel_id')
@@ -298,12 +301,12 @@ class VerificationSettingStore(BaseStore):
 class VerificationRequestStore(BaseStore):
     """Handles database access with the `VerificationRequests` table."""
 
-    def __init__(self, db_loc: str) -> None:
-        super().__init__(db_loc)
+    def __init__(self, db_file: Path) -> None:
+        super().__init__(db_file)
 
     async def create(self, guild_id: int, user_id: int, welcome_channel_id: int,
                      welcome_message_id: int) -> VerificationRequest:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """INSERT INTO
                         VerificationRequests(
                             guild_id,
@@ -325,7 +328,7 @@ class VerificationRequestStore(BaseStore):
             return user_verification
 
     async def close(self, verification_request: VerificationRequest, verified: bool) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """UPDATE VerificationRequests SET verified=?, closed_at=? WHERE id=?"""
             closed_at = int(time.time())
             await con.execute(statement, (verified, closed_at, verification_request.id))
@@ -333,7 +336,7 @@ class VerificationRequestStore(BaseStore):
             verification_request.verified = verified
 
     async def get_pending(self) -> List[VerificationRequest]:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'SELECT * FROM VerificationRequests WHERE closed_at IS NULL'
             cur = await con.execute(statement)
             verification_requests_raw = await cur.fetchall()
@@ -399,7 +402,7 @@ class ChooseBasicInfoView(ui.View):
         super().__init__(timeout=None)
         self.vs = verification_system
         self.age_range_select = ui.Select(
-            placeholder="What's your age range?",
+            placeholder="What's your age-range?",
             options=[
                 SelectOption(label='12-15'),
                 SelectOption(label='16-17'),
@@ -487,13 +490,13 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         self.gender = gender
         self.welcome_message = welcome_message
 
-        self.join_reason_text_input = ui.TextInput(
+        self.referrer_text_input = ui.TextInput(
             label='Referrer',
             placeholder='How did you find out about this server?',
             required=True,
             max_length=100
         )
-        self.additional_info_text_input = ui.TextInput(
+        self.join_reason_text_input = ui.TextInput(
             label='Join Reason',
             placeholder='Why are you here?',
             style=discord.TextStyle.paragraph,
@@ -501,13 +504,13 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
             max_length=500
         )
 
+        self.add_item(self.referrer_text_input)
         self.add_item(self.join_reason_text_input)
-        self.add_item(self.additional_info_text_input)
 
     async def on_submit(self, interaction: Interaction) -> None:
         _logger.info(f'{tools.user_string(interaction.user)} submitted their verification request with '
-                     f'{self.age_range=}, {self.gender=}, {self.join_reason_text_input.value=} and '
-                     f'{self.additional_info_text_input.value=}.')
+                     f'{self.age_range=}, {self.gender=}, {self.referrer_text_input.value=} and '
+                     f'{self.join_reason_text_input.value=}.')
 
         # Get the verification channel.
         request_channel_id = await self.vs.verification_settings_store.get_request_channel_id(interaction.guild_id)
@@ -525,14 +528,14 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         description = f'User {interaction.user.mention} wants to be verified. They provided the following information.'
         embed = Embed(title='Verification Request', description=description, color=discord.Color.blue(),
                       timestamp=datetime.now(timezone.utc))
-        embed.add_field(name='age range', value=self.age_range)
+        embed.add_field(name='age-range', value=self.age_range)
         embed.add_field(name='gender', value=self.gender)
+        embed.add_field(name='referrer', value=self.referrer_text_input.value)
         embed.add_field(name='join reason', value=self.join_reason_text_input.value)
-        embed.add_field(name='additional info', value=self.additional_info_text_input.value)
         embed.set_author(name=tools.user_string(interaction.user),
                          url=f'https://discordapp.com/users/{interaction.user.id}',
                          icon_url=interaction.user.display_avatar)
-        file = discord.File(self.vs.bot.img_dir / 'accept_reject.png', filename='image.png')
+        file = discord.File(self.vs.bot.config.img_dir / 'accept_reject.png', filename='image.png')
         embed.set_thumbnail(url='attachment://image.png')
 
         # Create the verification notification view.
@@ -576,12 +579,17 @@ class VerificationNotificationView(ui.View):
         self.add_item(self.reject_button)
 
     async def interaction_check(self, interaction: Interaction) -> bool:
-        if interaction.user.guild_permissions.manage_roles and interaction.user.guild_permissions.kick_members:
+        # INFO: Even though `reject_verification_request` kicks members, kick permissions are not necessary.
+        # The rationale is that this only applies to new members.
+        if interaction.user.guild_permissions.manage_roles:
             return True
         else:
-            _logger.info(f'{tools.user_string(interaction.user)} tried to verify or reject a verification request even '
-                         'though they lack the necessary permissions.')
-            await interaction.response.send_message('You are not allowed to do this action!')
+            member = interaction.guild.get_member(self.verification_request.user_id)
+            _logger.info(
+                f"{tools.user_string(interaction.user)} tried to verify or reject {tools.user_string(member)}'s "
+                "verification request even though they lack the necessary permissions."
+            )
+            await interaction.response.send_message('You are not allowed to do this action!', ephemeral=True)
             return False
 
     async def accept_verification_request(self, interaction: Interaction) -> None:
@@ -596,10 +604,17 @@ class VerificationNotificationView(ui.View):
                          "verification request.")
 
             # Assign the verification role to the user.
-            # TODO Assign the other roles (gender and age range).
+            # TODO Assign the other roles (gender and age-range).
             role_id = await self.vs.verification_settings_store.get_role_id(interaction.guild_id)
             role = interaction.guild.get_role(role_id)
-            await member.add_roles(role, reason='verify the user')
+            try:
+                await member.add_roles(role, reason='verify the user')
+            except discord.errors.Forbidden:
+                _logger.exception('The bot role is probably below the verification role.')
+                interaction.response.send_message(
+                    'Error: Lacking permissions. The bot role is probably below the verification role.', ephemeral=True
+                )
+                return
 
             # Store the decision to verify the user in the database.
             await self.vs.verification_request_store.close(self.verification_request, True)
@@ -642,7 +657,7 @@ class VerificationNotificationView(ui.View):
             embed = interaction.message.embeds[0]
             embed.title += ' [ACCEPTED]'
             embed.colour = discord.Color.green()
-            file = discord.File(self.vs.bot.img_dir / 'accepted_verification_request.png', filename='image.png')
+            file = discord.File(self.vs.bot.config.img_dir / 'accepted_verification_request.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
 
             # Send the edited embed and view.
@@ -729,7 +744,7 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
             embed = self.verification_notification_view.message.embeds[0]
             embed.title += ' [REJECTED]'
             embed.colour = discord.Color.red()
-            file = discord.File(self.vs.bot.img_dir / 'rejected_verification_request.png', filename='image.png')
+            file = discord.File(self.vs.bot.config.img_dir / 'rejected_verification_request.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
 
             # Send the edited embed and view.

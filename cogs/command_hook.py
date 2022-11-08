@@ -4,7 +4,7 @@ from typing import Any
 import discord
 from discord.ext import commands
 
-import tools
+from slimbot import SlimBot, tools
 
 _logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ _logger = logging.getLogger(__name__)
 class CommandHook(commands.Cog, name='command_hook'):
     """Logs the commands being used and handles command errors."""
 
-    def __init__(self, bot) -> None:
+    def __init__(self, bot: SlimBot) -> None:
         self.bot = bot
 
     @commands.Cog.listener()

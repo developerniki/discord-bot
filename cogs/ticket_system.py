@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import List, Optional
 
 import aiosqlite
@@ -11,8 +12,8 @@ from discord import ui, ButtonStyle, Interaction, Embed, TextChannel, User, Cate
 from discord.ext import commands, tasks
 from emoji import emojize
 
-import tools
-from main import BaseStore, SlimBot
+from slimbot import SlimBot, tools
+from slimbot.store import BaseStore
 
 _logger = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ class TicketSystem(commands.GroupCog, name='ticket'):
 
     def __init__(self, bot: SlimBot) -> None:
         self.bot = bot
-        self.ticket_settings_store = TicketSettingsStore(self.bot.db_loc)
-        self.ticket_store = TicketStore(self.bot.db_loc)
-        self.ticket_request_store = TicketRequestStore(self.bot.db_loc)
-        self.ticket_cooldown_store = TicketCooldownStore(self.bot.db_loc)
+        self.ticket_settings_store = TicketSettingsStore(self.bot.config.db_file)
+        self.ticket_store = TicketStore(self.bot.config.db_file)
+        self.ticket_request_store = TicketRequestStore(self.bot.config.db_file)
+        self.ticket_cooldown_store = TicketCooldownStore(self.bot.config.db_file)
         self._views_added = False
 
     @commands.Cog.listener()
@@ -99,7 +100,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
                        'To add another user to the ticket use `/ticket add_user <@user>`.'
         embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=discord.Color.yellow(),
                       timestamp=datetime.now(timezone.utc))
-        file = discord.File(self.bot.img_dir / 'accepted_ticket.png', filename='image.png')
+        file = discord.File(self.bot.config.img_dir / 'accepted_ticket.png', filename='image.png')
         embed.set_thumbnail(url='attachment://image.png')
         await channel.send(embed=embed, file=file)
 
@@ -112,7 +113,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         embed.set_author(name=tools.user_string(member),
                          url=f'https://discordapp.com/users/{member.id}',
                          icon_url=member.display_avatar)
-        file = discord.File(self.bot.img_dir / 'accepted_ticket.png', filename='image.png')
+        file = discord.File(self.bot.config.img_dir / 'accepted_ticket.png', filename='image.png')
         embed.set_thumbnail(url='attachment://image.png')
         await request_channel.send(embed=embed, file=file)
 
@@ -133,7 +134,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
             await ctx.channel.delete(reason='manually closing rejected ticket request channel')
             await self.ticket_request_store.remove_channel(ctx.channel.id)
         else:
-            await ctx.send(f'{ctx.channel.mention} is not a ticket channel!', ephemeral=True)
+                await ctx.send(f'{ctx.channel.mention} is not a ticket channel!', ephemeral=True)
 
     @commands.hybrid_command()
     @commands.has_guild_permissions(manage_channels=True)
@@ -343,8 +344,8 @@ class TicketRequest:
 class TicketSettingsStore(BaseStore):
     """Handles database access with the `Settings` table for settings related to the ticket system."""
 
-    def __init__(self, db_loc: str) -> None:
-        super().__init__(db_loc)
+    def __init__(self, db_file: Path) -> None:
+        super().__init__(db_file)
 
     async def get_request_channel_id(self, guild_id: int) -> int:
         channel_id = await self.get_setting(guild_id, 'ticket_request_channel_id')
@@ -363,12 +364,12 @@ class TicketSettingsStore(BaseStore):
 class TicketStore(BaseStore):
     """Handles database access with the `Tickets` table."""
 
-    def __init__(self, db_loc: str) -> None:
-        super().__init__(db_loc)
+    def __init__(self, db_file: Path) -> None:
+        super().__init__(db_file)
 
     async def num_open(self, guild_id: int, user_id: int) -> int:
         """Returns the number of open tickets of the user."""
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """SELECT COUNT(*)
                         FROM Tickets
                         WHERE guild_id = ? AND user_id = ? AND status="open"
@@ -379,7 +380,7 @@ class TicketStore(BaseStore):
             return num_open_tickets
 
     async def is_ticket_channel(self, channel_id: int) -> bool:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'SELECT 1 FROM Tickets WHERE channel_id = ?'
             cur = await con.execute(statement, (channel_id,))
             res = await cur.fetchone()
@@ -387,7 +388,7 @@ class TicketStore(BaseStore):
 
     async def create(self, guild_id: int, user_id: int, reason: Optional[str] = None) -> Ticket:
         """Create a new `Ticket` with status `open`."""
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """INSERT INTO
                         Tickets(guild_id, user_id, reason, status, created_at)
                         VALUES (?, ?, ?, "open", ?)
@@ -400,28 +401,28 @@ class TicketStore(BaseStore):
             return ticket
 
     async def set_channel(self, ticket: Ticket, channel_id: Optional[int]) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE Tickets SET channel_id=? WHERE id=?'
             await con.execute(statement, (channel_id, ticket.id))
             await con.commit()
             ticket.channel_id = channel_id
 
     async def close(self, ticket: Ticket, log: Optional[str]) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE Tickets SET status="closed", channel_id=NULL, log=?, closed_at=? WHERE id=?'
             await con.execute(statement, (log, int(time.time()), ticket.id))
             await con.commit()
             ticket.status = 'closed'
 
     async def close_by_channel(self, channel_id: int, log: Optional[str]) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE Tickets SET status="closed", channel_id=NULL, log=?, closed_at=? WHERE channel_id=?'
             await con.execute(statement, (log, int(time.time()), channel_id))
             await con.commit()
 
     async def close_all_user(self, guild_id: int, user_id: int) -> List[int]:
         """Set the status of all the users' open tickets to `closed` and return the associated channel ids."""
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """SELECT channel_id
                         FROM Tickets
                         WHERE guild_id=? AND user_id=? AND status="open"
@@ -440,7 +441,7 @@ class TicketStore(BaseStore):
             return channel_ids_where_open
 
     async def get_all(self) -> List[Ticket]:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'SELECT * FROM Tickets'
             cur = await con.execute(statement)
             tickets_raw = await cur.fetchall()
@@ -460,7 +461,7 @@ class TicketStore(BaseStore):
             return tickets
 
     async def get_open(self) -> List[Ticket]:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'SELECT * FROM Tickets WHERE status="open"'
             cur = await con.execute(statement)
             tickets_raw = await cur.fetchall()
@@ -483,12 +484,12 @@ class TicketStore(BaseStore):
 class TicketRequestStore(BaseStore):
     """Handles database access with the `TicketRequests` table."""
 
-    def __init__(self, db_loc: str) -> None:
-        super().__init__(db_loc)
+    def __init__(self, db_file: Path) -> None:
+        super().__init__(db_file)
 
     async def create(self, guild_id: int, user_id: int, reason: Optional[str]) -> TicketRequest:
         """Create a new `TicketRequest` with status `pending`."""
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """INSERT INTO
                         TicketRequests(guild_id, user_id, reason, status, created_at)
                         VALUES (?, ?, ?, "pending", ?)
@@ -502,27 +503,27 @@ class TicketRequestStore(BaseStore):
             return ticket_request
 
     async def is_ticket_request_channel(self, channel_id: int) -> bool:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'SELECT 1 FROM TicketRequests WHERE channel_id = ?'
             cur = await con.execute(statement, (channel_id,))
             res = await cur.fetchone()
             return res is not None
 
     async def set_channel(self, ticket_request: TicketRequest, channel_id: Optional[int]) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE TicketRequests SET channel_id=? WHERE id=?'
             await con.execute(statement, (channel_id, ticket_request.id))
             await con.commit()
             ticket_request.channel_id = channel_id
 
     async def remove_channel(self, channel_id: int) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE TicketRequests SET channel_id=NULL WHERE channel_id=?'
             await con.execute(statement, (channel_id,))
             await con.commit()
 
     async def accept(self, ticket_request: TicketRequest, ticket: Ticket) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE TicketRequests SET ticket_id=?, status="accepted", closed_at=? WHERE id=?'
             closed_at = int(time.time())
             await con.execute(statement, (ticket.id, closed_at, ticket_request.id))
@@ -530,7 +531,7 @@ class TicketRequestStore(BaseStore):
             ticket_request.status = 'accepted'
 
     async def reject(self, ticket_request: TicketRequest) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE TicketRequests SET status="rejected", closed_at=? WHERE id=?'
             closed_at = int(time.time())
             await con.execute(statement, (closed_at, ticket_request.id))
@@ -539,7 +540,7 @@ class TicketRequestStore(BaseStore):
 
     async def reject_all_user(self, guild_id: int, user_id: int) -> None:
         """Set the status of all the users' pending ticket requests to `rejected`."""
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """UPDATE TicketRequests
                         SET status="rejected"
                         WHERE guild_id=? AND user_id=? AND status="pending"
@@ -548,13 +549,13 @@ class TicketRequestStore(BaseStore):
             await con.commit()
 
     async def delete(self, ticket_request: TicketRequest) -> None:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'DELETE FROM TicketRequests WHERE id=?'
             await con.execute(statement, (ticket_request.id,))
             await con.commit()
 
     async def get_all(self) -> List[TicketRequest]:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'SELECT * FROM TicketRequests'
             cur = await con.execute(statement)
             ticket_requests_raw = await cur.fetchall()
@@ -574,7 +575,7 @@ class TicketRequestStore(BaseStore):
             return ticket_requests
 
     async def get_pending(self) -> List[TicketRequest]:
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = 'SELECT * FROM TicketRequests WHERE status="pending"'
             cur = await con.execute(statement)
             ticket_requests_raw = await cur.fetchall()
@@ -597,7 +598,7 @@ class TicketRequestStore(BaseStore):
         """Returns the ticket request channels that are due for deletion (`seconds` seconds after rejecting the
         request).
         """
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """SELECT channel_id
                         FROM TicketRequests
                         WHERE status="rejected" AND IFNULL(MAX(rejected_at) - ?, 0) > ?
@@ -608,7 +609,7 @@ class TicketRequestStore(BaseStore):
 
     async def num_pending(self, guild_id: int, user_id: int) -> int:
         """Returns the number of pending ticket requests of the user."""
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """SELECT COUNT(*)
                         FROM TicketRequests
                         WHERE guild_id = ? AND user_id = ? AND status="pending"
@@ -622,12 +623,12 @@ class TicketRequestStore(BaseStore):
 class TicketCooldownStore(BaseStore):
     """Handles database access with the `UserTicketCooldowns` table."""
 
-    def __init__(self, db_loc: str) -> None:
-        super().__init__(db_loc)
+    def __init__(self, db_file: Path) -> None:
+        super().__init__(db_file)
 
     async def get_remaining_cooldown(self, guild_id: int, user_id: int) -> int:
         """Get the remaining ticket cooldown."""
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """SELECT IFNULL(MAX(cooldown_ends_at) - ?, 0)
                         FROM UserTicketCooldowns
                         WHERE guild_id=? AND user_id = ?"""
@@ -642,7 +643,7 @@ class TicketCooldownStore(BaseStore):
         particular ticket.
         """
         ticket_id = None if ticket is None else ticket.id
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             cooldown_ends_at = int(time.time()) + cooldown_in_secs
             statement = """INSERT OR REPLACE INTO
                         UserTicketCooldowns(guild_id, user_id, ticket_id, cooldown_ends_at)
@@ -652,7 +653,7 @@ class TicketCooldownStore(BaseStore):
 
     async def reset_user_cooldown(self, guild_id: int, user_id: int) -> None:
         """Reset the ticket cooldown of `user` in `guild` by removing all the cooldowns."""
-        async with aiosqlite.connect(self.db_loc) as con:
+        async with aiosqlite.connect(self.db_file) as con:
             statement = """DELETE FROM UserTicketCooldowns WHERE guild_id=? AND user_id=?"""
             await con.execute(statement, (guild_id, user_id))
             await con.commit()
@@ -775,7 +776,7 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
         embed.set_author(name=tools.user_string(interaction.user),
                          url=f'https://discordapp.com/users/{interaction.user.id}',
                          icon_url=interaction.user.display_avatar)
-        file = discord.File(self.ts.bot.img_dir / 'accept_reject.png', filename='image.png')
+        file = discord.File(self.ts.bot.config.img_dir / 'accept_reject.png', filename='image.png')
         embed.set_thumbnail(url='attachment://image.png')
 
         # Create the ticket notification view.
@@ -853,7 +854,7 @@ class TicketNotificationView(ui.View):
                            'To add another user to the ticket use `/ticket adduser <@user>`.'
             embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=discord.Color.yellow(),
                           timestamp=datetime.now(timezone.utc))
-            file = discord.File(self.ts.bot.img_dir / 'accepted_ticket.png', filename='image.png')
+            file = discord.File(self.ts.bot.config.img_dir / 'accepted_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             await channel.send(embed=embed, file=file)
 
@@ -870,7 +871,7 @@ class TicketNotificationView(ui.View):
             embed = interaction.message.embeds[0]
             embed.title += ' [ACCEPTED]'
             embed.colour = discord.Color.green()
-            file = discord.File(self.ts.bot.img_dir / 'accepted_ticket.png', filename='image.png')
+            file = discord.File(self.ts.bot.config.img_dir / 'accepted_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
 
             # Send the edited embed and view.
@@ -923,7 +924,7 @@ class TicketNotificationView(ui.View):
                           description=description,
                           color=discord.Color.red(),
                           timestamp=datetime.now(timezone.utc))
-            file = discord.File(self.ts.bot.img_dir / 'rejected_ticket.png', filename='image.png')
+            file = discord.File(self.ts.bot.config.img_dir / 'rejected_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             await channel.send(embed=embed, file=file)
 
@@ -946,7 +947,7 @@ class TicketNotificationView(ui.View):
             embed = interaction.message.embeds[0]
             embed.title += ' [REJECTED]'
             embed.colour = discord.Color.red()
-            file = discord.File(self.ts.bot.img_dir / 'rejected_ticket.png', filename='image.png')
+            file = discord.File(self.ts.bot.config.img_dir / 'rejected_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
 
             # Send the edited embed and view.

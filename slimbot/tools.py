@@ -22,16 +22,18 @@ def unix_seconds_from_discord_snowflake_id(snowflake_id: int) -> int:
     return ((snowflake_id >> 22) + discord_epoch) // 1_000
 
 
-async def fetch_from_api(url: str, key: str, default: str, from_list: bool = False) -> str:
-    """Fetch a string from some web API.
+async def fetch_html_escaped_string_from_api(url: str, key: str, default: str, from_list: bool = False) -> str:
+    """Fetch a string from some web API and HTML unescape it.
 
-    Positional arguments:
-    url -- the URL to fetch
-    key -- the key of the desired value
-    default -- return this if the request failed or returned None or an empty string
+    Args:
+        url: The URL to fetch.
+        key: The key of the desired value.
+        default: Returns this if the request failed or returned None or an empty string.
+        from_list: Whether the content is wrapped in a list.
 
-    Keyword arguments:
-    from_list -- whether the content is wrapped in a list (default: False)
+    Returns:
+        str: The result the API returned but HTML unescaped.
+             Returns `default` if the result is either `None`, empty, or not a string.
     """
     async with aiohttp.ClientSession() as session:
         try:
@@ -46,7 +48,8 @@ async def fetch_from_api(url: str, key: str, default: str, from_list: bool = Fal
         except (ClientConnectorError, ContentTypeError):
             result = None
 
-    result = result or default
+    if not isinstance(result, str) or not result:
+        result = default
 
     # Unescape HTML entities like `&quot;`.
     result = html.unescape(result)

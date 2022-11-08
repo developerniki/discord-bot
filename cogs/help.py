@@ -3,7 +3,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-from main import SlimBot
+from slimbot import SlimBot
 
 
 class Help(commands.Cog, name='help'):
@@ -47,9 +47,9 @@ class Help(commands.Cog, name='help'):
                     description=self.bot.cogs[bot_cog].__doc__,
                     color=discord.Color.purple(),
                 )
-                commands = [command for command in self.bot.get_cog(bot_cog).get_commands() if not command.hidden]
-                for command in commands:
-                    embed.add_field(name=f'• __**/{command.name}**__', value=command.help, inline=False)
+                for command in self.bot.get_cog(bot_cog).get_commands():
+                    if not command.hidden:
+                        embed.add_field(name=f'• __**/{command.name}**__', value=command.help, inline=False)
             else:
                 embed = discord.Embed(
                     title='Module Not Found',

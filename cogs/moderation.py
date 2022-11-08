@@ -4,8 +4,7 @@ from typing import Optional
 from discord import TextChannel
 from discord.ext import commands
 
-import tools
-from main import SlimBot
+from slimbot import SlimBot, tools
 
 _logger = logging.getLogger(__name__)
 

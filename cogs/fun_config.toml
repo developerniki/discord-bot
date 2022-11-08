@@ -23,18 +23,12 @@ reactions = [":sleeping_face:", ":crescent_moon:", ':ZZZ:', ':yawning_face:']
 responses = ["Sweet dreams! ~", "Good nighty! :relieved_face:"]
 
 [patterns."<mention>?(, )?(hello|hi|sup|what'?s up\\?)(?!\\S)"]
-reactions = []
-responses = [
-    "What's up? :smiling_face_with_sunglasses:",
-    "Hi! :waving_hand:",
-    "Hello!",
-    "Hey! :waving_hand:",
-    "How's it going?"
-]
+reactions = [":waving_hand:", ":smiling_face_with_smiling_eyes:"]
+responses = []
 
 [patterns."<mention>?(, )?(bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?)(?!\\S)"]
 reactions = [":waving_hand:"]
-responses = ["Take care!"]
+responses = ["Take care!", "See you around!", "Hope to see you back, soon!"]
 
 [patterns."<mention>?(, )?((I )?(love|:red_heart:) (you|u|ya)|hug)(?!\\S)"]
 reactions = [":red_heart:", ":heart_on_fire:", ":revolving_hearts:"]

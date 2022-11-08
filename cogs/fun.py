@@ -9,8 +9,7 @@ from discord import Message, User
 from discord.ext import commands
 from emoji import demojize, emojize
 
-import tools
-from main import SlimBot
+from slimbot import SlimBot, tools
 
 _logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ class Fun(commands.Cog, name='fun'):
         self.hug_links = []
         self._views_added = False
 
-        config_file = self.bot.cog_dir / 'fun_config.toml'
+        config_file = self.bot.config.ext_dir / 'fun_config.toml'
 
         try:
             with open(config_file) as file:
@@ -116,7 +115,7 @@ async def fetch_cat_picture_url() -> str:
         'https://en.wikipedia.org/wiki/Cat#/media/File:Felis_catus-cat_on_snow.jpg',
         'https://en.wikipedia.org/wiki/Cat#/media/File:Black_Cat_(7983739954).jpg',
     ])
-    return await tools.fetch_from_api(url=url, key=key, default=default, from_list=True)
+    return await tools.fetch_html_escaped_string_from_api(url=url, key=key, default=default, from_list=True)
 
 
 async def fetch_insult() -> str:
@@ -124,7 +123,7 @@ async def fetch_insult() -> str:
     url = 'https://evilinsult.com/generate_insult.php?lang=en&type=json'
     key = 'insult'
     default = 'You suck!'
-    return await tools.fetch_from_api(url=url, key=key, default=default)
+    return await tools.fetch_html_escaped_string_from_api(url=url, key=key, default=default)
 
 
 async def fetch_insult_filter_you(max_retries=10) -> str:
