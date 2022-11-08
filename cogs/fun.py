@@ -32,7 +32,7 @@ class Fun(commands.Cog, name='fun'):
                 self.pattern_to_action = [PatternToAction(pattern, actions['reactions'], actions['responses'])
                                           for pattern, actions in config['patterns'].items()]
         except (FileNotFoundError, json.JSONDecodeError, KeyError, re.error):
-            logging.exception(f'Something went wrong opening {config_file}.')
+            _logger.exception(f'Something went wrong opening {config_file}.')
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
