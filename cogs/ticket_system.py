@@ -168,7 +168,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
 
                 header = f'Transcript of ticket #{ticket.id}, created at {created_at} for {ticket.user_id}'
                 if ticket.reason:
-                    header += f' with reason {ticket.reason} '
+                    header += f' with reason "{ticket.reason}" '
                 header += f'and closed at {closed_at}\n'
 
                 txt_log = [header]
@@ -182,7 +182,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                     embeds = '\n'.join(embeds)
                     cur_line = f'[{created_at}] {author}: {content}'
                     if embeds:
-                        cur_line += '\n{embeds}'
+                        cur_line += f'\n{embeds}'
                     txt_log.append(cur_line)
 
                 txt_log = '\n'.join(txt_log)
