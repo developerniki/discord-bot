@@ -1,0 +1,7 @@
+---- TODO Delete this script.
+--UPDATE Settings SET k="join_channel_id" WHERE k="welcome_channel_id";
+--UPDATE Settings SET k="verified_welcome_channel_id" WHERE k="welcome_channel_id";
+--UPDATE Settings SET k="verified_welcome_message_id" WHERE k="welcome_message_id";
+--UPDATE Settings SET k="verification_role_id" WHERE k="verified_role_id";
+--ALTER TABLE VerificationRequests RENAME COLUMN welcome_channel_id TO join_channel_id;
+--ALTER TABLE VerificationRequests RENAME COLUMN welcome_message_id TO join_message_id;

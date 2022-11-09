@@ -1,4 +1,6 @@
 import asyncio
+import io
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -8,7 +10,7 @@ from typing import List, Optional
 import aiosqlite
 import discord
 import humanize
-from discord import ui, ButtonStyle, Interaction, Embed, TextChannel, User, CategoryChannel
+from discord import ui, ButtonStyle, Interaction, Embed, TextChannel, User, CategoryChannel, Message
 from discord.ext import commands, tasks
 from emoji import emojize
 
@@ -18,8 +20,8 @@ from slimbot.store import BaseStore
 _logger = logging.getLogger(__name__)
 
 
-class TicketSystem(commands.GroupCog, name='ticket'):
-    """A group cog that implements a ticket system allowing server members to request tickets from staff."""
+class TicketSystem(commands.Cog, name='Ticket System'):
+    """Allows server members to request tickets from staff."""
 
     def __init__(self, bot: SlimBot) -> None:
         self.bot = bot
@@ -52,11 +54,16 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         channel_ids = await self.ticket_request_store.get_due_channel_ids(seconds=24 * 60 * 60)
         for channel_id in channel_ids:
             channel = self.bot.get_channel(channel_id)
-            await channel.delete(reason='rejected ticket request channel due for deletion')
+            if channel is not None:
+                await channel.delete(reason='rejected ticket request channel due for deletion')
             await self.ticket_request_store.remove_channel(channel_id)
 
-    @commands.hybrid_command()
+    @commands.hybrid_group()
     @commands.has_guild_permissions(manage_channels=True)
+    async def ticket(self, ctx):
+        pass
+
+    @ticket.command()
     async def create(self, ctx: commands.Context, member: User, reason: Optional[str] = None) -> None:
         """Create a new ticket."""
         # Get the ticket request channel.
@@ -80,12 +87,12 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         channel = await ctx.guild.create_text_channel(
             f'ticket {ticket.id}',
             category=request_channel.category,
-            reason=f'create ticket for user {tools.user_string(ctx.author)}',
+            reason=f'create ticket for user {tools.user_string(member)}',
         )
         await channel.set_permissions(
             ctx.guild.get_member(ticket.user_id),
             read_messages=True,
-            send_messages=True
+            send_messages=True,
         )
 
         # Update the ticket with the channel id.
@@ -120,25 +127,86 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         # Notify the user that the ticket has been created.
         await ctx.send(f"Successfully created a ticket at channel {channel.mention}.", ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
+    @ticket.command()
     async def close(self, ctx: commands.Context) -> None:
         """Close the ticket."""
         if await self.ticket_store.is_ticket_channel(ctx.channel.id):
-            await ctx.send(f'Closing the ticket {ctx.channel.mention}.', ephemeral=True)
-            # TODO Store a log in the database.
+            # Notify everyone present that the ticket is being closed.
+            await ctx.send(
+                f'Closing the ticket {ctx.channel.mention} and generating the logs. This might take a while.'
+            )
+
+            # Fetch all messages. # TODO Also store images.
+            log = [message async for message in ctx.channel.history(limit=None, oldest_first=True)]
+            log_dict = [
+                {
+                    'message_id': message.id,
+                    'author_id': message.author.id,
+                    'author_name': f'{message.author.name}#{message.author.discriminator}',
+                    'created_at': round(message.created_at.timestamp()),
+                    'message': message.content,
+                    'embeds': [embed.to_dict() for embed in message.embeds],
+                    'references': message.reference.message_id if message.reference else None,
+                    'reactions': [reaction.emoji for reaction in message.reactions]
+                }
+                for message in log
+            ]
+
+            # Fetch the ticket before closing it.
+            ticket = await self.ticket_store.get_ticket_by_channel_id(ctx.channel.id)
+
+            # Store the decision to close the ticket and the log in the database.
+            await self.ticket_store.close(ticket=ticket, log=json.dumps(log_dict))
+
+            # If a log channel exists, store the log there.
+            ticket_log_channel_id = await self.ticket_settings_store.get_log_channel_id(ctx.guild.id)
+            ticket_log_channel = ctx.guild.get_channel(ticket_log_channel_id)
+            if ticket_log_channel is not None:
+                time_fmt = '%Y-%m-%d %H:%M:%S'
+                created_at = datetime.fromtimestamp(ticket.created_at).strftime(time_fmt)
+                closed_at = datetime.fromtimestamp(ticket.closed_at).strftime(time_fmt)
+
+                header = f'Transcript of ticket #{ticket.id}, created at {created_at} for {ticket.user_id}'
+                if ticket.reason:
+                    header += f' with reason {ticket.reason} '
+                header += f'and closed at {closed_at}\n'
+
+                txt_log = [header]
+
+                for message in log:
+                    message: Message
+                    created_at = message.created_at.strftime(time_fmt)
+                    author = tools.user_string(message.author)
+                    content = message.content.strip()
+                    embeds = [json.dumps(embed.to_dict(), separators=(',', ':')) for embed in message.embeds]
+                    embeds = '\n'.join(embeds)
+                    cur_line = f'[{created_at}] {author}: {content}'
+                    if embeds:
+                        cur_line += '\n{embeds}'
+                    txt_log.append(cur_line)
+
+                txt_log = '\n'.join(txt_log)
+                await ticket_log_channel.send(
+                    content=f'Ticket log #{ticket.id}',
+                    file=discord.File(fp=io.StringIO(txt_log), filename=f'ticket_log{ticket.id}.txt'),
+                )
+
+            # Delete the ticket channel.
             await ctx.channel.delete(reason='closing ticket')
-            await self.ticket_store.close_by_channel(channel_id=ctx.channel.id, log=None)
         elif await self.ticket_request_store.is_ticket_request_channel(ctx.channel.id):
-            await ctx.send(f'Closing the ticket request.', ephemeral=True)
+            # Notify everyone present that the channel is being closed.
+            await ctx.send(f'Closing the ticket request.')
+
+            # Delete the channel.
             await ctx.channel.delete(reason='manually closing rejected ticket request channel')
+
+            # Remove the channel from the database so it is marked as cleaned up.
             await self.ticket_request_store.remove_channel(ctx.channel.id)
         else:
-                await ctx.send(f'{ctx.channel.mention} is not a ticket channel!', ephemeral=True)
+            await ctx.send(f'{ctx.channel.mention} is not a ticket channel!', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def request_button(self, ctx: commands.Context) -> None:
+    @ticket.command()
+    async def button(self, ctx: commands.Context) -> None:
         """Create a ticket request button."""
         channel_id = await self.ticket_settings_store.get_request_channel_id(ctx.guild.id)
         channel = channel_id and ctx.guild.get_channel(channel_id)
@@ -149,24 +217,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
             await ctx.channel.send(view=ticket_request_view)
             await ctx.send(f'Created the ticket request button with target channel {channel.mention}.', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def clear_all(self, ctx: commands.Context, user: User) -> None:
-        """Close open tickets and reject pending ticket requests for `user` without updating notifications."""
-        # TODO Deactivate ticket notification views.
-        # Close all open tickets and delete the corresponding channels.
-        channel_ids = await self.ticket_store.close_all_user(guild_id=ctx.guild.id, user_id=user.id)
-        for channel_id in channel_ids:
-            channel = channel_id and ctx.guild.get_channel(channel_id)
-            if channel is not None:
-                await channel.delete(reason='closing ticket')
-
-        # Reject all pending ticket requests.
-        await self.ticket_request_store.reject_all_user(guild_id=ctx.guild.id, user_id=user.id)
-        await ctx.send(f'Closed open tickets and rejected pending ticket requests for {user.mention}.', ephemeral=True)
-
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
+    @ticket.command()
     async def add(self, ctx: commands.Context, user: discord.Member, allow_send_messages: bool = True) -> None:
         """Add `user` to this ticket channel."""
         is_ticket_channel = await self.ticket_store.is_ticket_channel(ctx.channel.id)
@@ -185,8 +236,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         else:
             await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel!', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
+    @ticket.command()
     async def remove(self, ctx: commands.Context, user: discord.Member) -> None:
         """Remove `user` from this ticket channel."""
         is_ticket_channel = await self.ticket_store.is_ticket_channel(ctx.channel.id)
@@ -201,8 +251,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         else:
             await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel!', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
+    @ticket.command()
     async def mute(self, ctx: commands.Context, user: discord.Member) -> None:
         """Mute `user` in this ticket channel."""
         is_ticket_channel = await self.ticket_store.is_ticket_channel(ctx.channel.id)
@@ -220,8 +269,7 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         else:
             await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel!', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
+    @ticket.command()
     async def unmute(self, ctx: commands.Context, user: discord.Member) -> None:
         """Unmute `user` in this ticket channel."""
         is_ticket_channel = await self.ticket_store.is_ticket_channel(ctx.channel.id)
@@ -239,70 +287,87 @@ class TicketSystem(commands.GroupCog, name='ticket'):
         else:
             await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel!', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def get_request_channel(self, ctx: commands.Context) -> None:
-        """Get the ticket request channel."""
-        channel_id = await self.ticket_settings_store.get_request_channel_id(ctx.guild.id)
-        channel = channel_id and ctx.guild.get_channel(channel_id)
+    @ticket.command()
+    async def requestchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
+        """Get or set the ticket request channel, depending on whether `channel` is present."""
         if channel is None:
-            await ctx.send(f'The ticket request channel is not configured yet.', ephemeral=True)
+            channel_id = await self.ticket_settings_store.get_request_channel_id(ctx.guild.id)
+            channel = channel_id and ctx.guild.get_channel(channel_id)
+            if channel is None:
+                await ctx.send(f'The ticket request channel is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The ticket request channel is {channel.mention}.', ephemeral=True)
         else:
-            await ctx.send(f'The ticket request channel is {channel.mention}.', ephemeral=True)
+            await self.ticket_settings_store.set_request_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
+            await ctx.send(f'The ticket request channel has been set to {channel.mention}.', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def set_request_channel(self, ctx: commands.Context, channel: TextChannel) -> None:
-        """Set the ticket request channel."""
-        await self.ticket_settings_store.set_request_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
-        await ctx.send(f'The ticket request channel has been set to {channel.mention}.', ephemeral=True)
-
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def get_remaining_user_cooldown(self, ctx: commands.Context, user: User) -> None:
-        """Get `user`'s remaining ticket request cooldown."""
-        cooldown_in_secs = await self.ticket_cooldown_store.get_remaining_cooldown(guild_id=ctx.guild.id,
-                                                                                   user_id=user.id)
-        if cooldown_in_secs == 0:
-            msg = f"{user.mention} currently does not have a ticket cooldown."
+    @ticket.command()
+    async def logchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
+        """Get or set the ticket log channel, depending on whether `channel` is present."""
+        if channel is None:
+            channel_id = await self.ticket_settings_store.get_log_channel_id(ctx.guild.id)
+            channel = channel_id and ctx.guild.get_channel(channel_id)
+            if channel is None:
+                await ctx.send(f'The ticket log channel is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The ticket log channel is {channel.mention}.', ephemeral=True)
         else:
-            msg = f"{user.mention}'s ticket cooldown is {humanize.naturaldelta(cooldown_in_secs)}."
-        await ctx.send(msg, ephemeral=True)
+            await self.ticket_settings_store.set_log_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
+            await ctx.send(f'The ticket log channel has been set to {channel.mention}.', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def set_user_cooldown(self, ctx: commands.Context, user: User, cooldown_in_secs: int) -> None:
-        """Set `user`'s ticket request cooldown."""
-        await self.ticket_cooldown_store.set_user_cooldown(guild_id=ctx.guild.id, user_id=user.id,
-                                                           cooldown_in_secs=cooldown_in_secs)
-        await ctx.send(f"Successfully set {user.mention}'s ticket cooldown to {cooldown_in_secs} seconds.",
-                       ephemeral=True)
+    @ticket.command()
+    async def cooldown(self, ctx: commands.Context, user: Optional[User], cooldown_in_secs: Optional[int]) -> None:
+        """Get or set the guild's or user's ticket request cooldown, depending on which arguments are present."""
+        if cooldown_in_secs is not None and cooldown_in_secs < 0:
+            cooldown_in_secs = 0
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def reset_user_cooldown(self, ctx: commands.Context, user: User) -> None:
-        """Reset `user`'s ticket request cooldown."""
-        await self.ticket_cooldown_store.reset_user_cooldown(guild_id=ctx.guild.id, user_id=user.id)
-        await ctx.send(f"Successfully reset {user.mention}'s ticket cooldown.", ephemeral=True)
-
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def get_guild_cooldown(self, ctx: commands.Context) -> None:
-        """Get the guild's ticket request cooldown."""
-        cooldown_in_secs = await self.ticket_settings_store.get_guild_cooldown(guild_id=ctx.guild.id)
-        cooldown = humanize.naturaldelta(cooldown_in_secs) if cooldown_in_secs != 0 else 'nothing'
-        if cooldown_in_secs == 0:
-            msg = 'The guild currently does not have a ticket cooldown.'
+        if user is None:
+            if cooldown_in_secs is None:
+                cooldown_in_secs = await self.ticket_settings_store.get_guild_cooldown(guild_id=ctx.guild.id)
+                cooldown = humanize.naturaldelta(cooldown_in_secs) if cooldown_in_secs != 0 else 'nothing'
+                if cooldown_in_secs == 0:
+                    msg = 'The guild currently does not have a ticket cooldown.'
+                else:
+                    msg = f"The guild's ticket cooldown is {cooldown}."
+                await ctx.send(msg, ephemeral=True)
+            else:
+                await self.ticket_settings_store.set_guild_cooldown(guild_id=ctx.guild.id,
+                                                                    cooldown_in_secs=cooldown_in_secs)
+                await ctx.send(f"Successfully set the guild's ticket cooldown to {cooldown_in_secs} seconds.",
+                               ephemeral=True)
         else:
-            msg = f"The guild's ticket cooldown is {cooldown}."
-        await ctx.send(msg, ephemeral=True)
+            if cooldown_in_secs is None:
+                cooldown_in_secs = await self.ticket_cooldown_store.get_remaining_cooldown(guild_id=ctx.guild.id,
+                                                                                           user_id=user.id)
+                if cooldown_in_secs == 0:
+                    msg = f"{user.mention} currently does not have a ticket cooldown."
+                else:
+                    msg = f"{user.mention}'s ticket cooldown is {humanize.naturaldelta(cooldown_in_secs)}."
+                await ctx.send(msg, ephemeral=True)
+            else:
+                # Reset cooldowns of current tickets first.
+                await self.ticket_cooldown_store.reset_user_cooldown(guild_id=ctx.guild.id, user_id=user.id)
+                if cooldown_in_secs > 0:  # If the cooldown is 0, we don't need to set it.
+                    await self.ticket_cooldown_store.set_user_cooldown(guild_id=ctx.guild.id, user_id=user.id,
+                                                                       cooldown_in_secs=cooldown_in_secs)
+                await ctx.send(f"Successfully set {user.mention}'s ticket cooldown to {cooldown_in_secs} seconds.",
+                               ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def set_guild_cooldown(self, ctx: commands.Context, cooldown_in_secs: int) -> None:
-        """Set the guild's ticket request cooldown."""
-        await self.ticket_settings_store.set_guild_cooldown(guild_id=ctx.guild.id, cooldown_in_secs=cooldown_in_secs)
-        await ctx.send(f"Successfully set the guild's ticket cooldown to {cooldown_in_secs} seconds.", ephemeral=True)
+    @ticket.command(hidden=True)
+    async def clear(self, ctx: commands.Context, user: User) -> None:
+        """WARNING: Only use when something is broken. Close tickets and reject pending requests for `user`."""
+        # TODO Deactivate ticket notification views.
+        # TODO Store logs.
+        # Close all open tickets and delete the corresponding channels.
+        channel_ids = await self.ticket_store.close_all_user(guild_id=ctx.guild.id, user_id=user.id)
+        for channel_id in channel_ids:
+            channel = channel_id and ctx.guild.get_channel(channel_id)
+            if channel is not None:
+                await channel.delete(reason='closing ticket')
+
+        # Reject all pending ticket requests.
+        await self.ticket_request_store.reject_all_user(guild_id=ctx.guild.id, user_id=user.id)
+        await ctx.send(f'Closed open tickets and rejected pending ticket requests for {user.mention}.', ephemeral=True)
 
 
 class Ticket:
@@ -354,6 +419,13 @@ class TicketSettingsStore(BaseStore):
     async def set_request_channel_id(self, guild_id: int, channel_id: int) -> None:
         await self.set_setting(guild_id, 'ticket_request_channel_id', channel_id)
 
+    async def get_log_channel_id(self, guild_id: int) -> int:
+        channel_id = await self.get_setting(guild_id, 'ticket_log_channel_id')
+        return channel_id
+
+    async def set_log_channel_id(self, guild_id: int, channel_id: int) -> None:
+        await self.set_setting(guild_id, 'ticket_log_channel_id', channel_id)
+
     async def get_guild_cooldown(self, guild_id: int) -> int:
         return await self.get_setting(guild_id, 'ticket_cooldown')
 
@@ -393,7 +465,7 @@ class TicketStore(BaseStore):
                         Tickets(guild_id, user_id, reason, status, created_at)
                         VALUES (?, ?, ?, "open", ?)
                         """
-            created_at = int(time.time())
+            created_at = round(time.time())
             cur = await con.execute(statement, (guild_id, user_id, reason, created_at))
             await con.commit()
             ticket = Ticket(ticket_id=cur.lastrowid, guild_id=guild_id, user_id=user_id, reason=reason, status="open",
@@ -409,15 +481,20 @@ class TicketStore(BaseStore):
 
     async def close(self, ticket: Ticket, log: Optional[str]) -> None:
         async with aiosqlite.connect(self.db_file) as con:
-            statement = 'UPDATE Tickets SET status="closed", channel_id=NULL, log=?, closed_at=? WHERE id=?'
-            await con.execute(statement, (log, int(time.time()), ticket.id))
+            statement = 'UPDATE Tickets SET status="closed", channel_id=NULL, log=json(?), closed_at=? WHERE id=?'
+            closed_at = round(time.time())
+            await con.execute(statement, (log, closed_at, ticket.id))
             await con.commit()
             ticket.status = 'closed'
+            ticket.closed_at = closed_at
 
     async def close_by_channel(self, channel_id: int, log: Optional[str]) -> None:
         async with aiosqlite.connect(self.db_file) as con:
-            statement = 'UPDATE Tickets SET status="closed", channel_id=NULL, log=?, closed_at=? WHERE channel_id=?'
-            await con.execute(statement, (log, int(time.time()), channel_id))
+            statement = """UPDATE Tickets
+                        SET status=\"closed\", channel_id=NULL, log=json(?), closed_at=?
+                        WHERE channel_id=?
+                        """
+            await con.execute(statement, (log, round(time.time()), channel_id))
             await con.commit()
 
     async def close_all_user(self, guild_id: int, user_id: int) -> List[int]:
@@ -439,6 +516,27 @@ class TicketStore(BaseStore):
             await con.commit()
 
             return channel_ids_where_open
+
+    async def get_ticket_by_channel_id(self, channel_id: int) -> Optional[Ticket]:
+        async with aiosqlite.connect(self.db_file) as con:
+            statement = 'SELECT * FROM Tickets WHERE channel_id=?'
+            cur = await con.execute(statement, (channel_id,))
+            ticket_raw = await cur.fetchone()
+            if ticket_raw is not None:
+                ticket = Ticket(
+                    ticket_id=ticket_raw[0],
+                    guild_id=ticket_raw[1],
+                    user_id=ticket_raw[2],
+                    reason=ticket_raw[3],
+                    status=ticket_raw[4],
+                    channel_id=ticket_raw[5],
+                    log=ticket_raw[6],
+                    created_at=ticket_raw[7],
+                    closed_at=ticket_raw[8]
+                )
+            else:
+                ticket = None
+            return ticket
 
     async def get_all(self) -> List[Ticket]:
         async with aiosqlite.connect(self.db_file) as con:
@@ -494,7 +592,7 @@ class TicketRequestStore(BaseStore):
                         TicketRequests(guild_id, user_id, reason, status, created_at)
                         VALUES (?, ?, ?, "pending", ?)
                         """
-            created_at = int(time.time())
+            created_at = round(time.time())
             cur = await con.execute(statement, (guild_id, user_id, reason, created_at))
             await con.commit()
             ticket_request = TicketRequest(ticket_request_id=cur.lastrowid, guild_id=guild_id, user_id=user_id,
@@ -525,7 +623,7 @@ class TicketRequestStore(BaseStore):
     async def accept(self, ticket_request: TicketRequest, ticket: Ticket) -> None:
         async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE TicketRequests SET ticket_id=?, status="accepted", closed_at=? WHERE id=?'
-            closed_at = int(time.time())
+            closed_at = round(time.time())
             await con.execute(statement, (ticket.id, closed_at, ticket_request.id))
             await con.commit()
             ticket_request.status = 'accepted'
@@ -533,7 +631,7 @@ class TicketRequestStore(BaseStore):
     async def reject(self, ticket_request: TicketRequest) -> None:
         async with aiosqlite.connect(self.db_file) as con:
             statement = 'UPDATE TicketRequests SET status="rejected", closed_at=? WHERE id=?'
-            closed_at = int(time.time())
+            closed_at = round(time.time())
             await con.execute(statement, (closed_at, ticket_request.id))
             await con.commit()
             ticket_request.status = 'rejected'
@@ -603,7 +701,7 @@ class TicketRequestStore(BaseStore):
                         FROM TicketRequests
                         WHERE status="rejected" AND IFNULL(MAX(rejected_at) - ?, 0) > ?
                         """
-            cur = await con.execute(statement, (int(time.time()), seconds))
+            cur = await con.execute(statement, (round(time.time()), seconds))
             due_channel_ids = await cur.fetchall()
             return [channel_id[0] for channel_id in due_channel_ids]
 
@@ -632,7 +730,7 @@ class TicketCooldownStore(BaseStore):
             statement = """SELECT IFNULL(MAX(cooldown_ends_at) - ?, 0)
                         FROM UserTicketCooldowns
                         WHERE guild_id=? AND user_id = ?"""
-            cur = await con.execute(statement, (int(time.time()), guild_id, user_id))
+            cur = await con.execute(statement, (round(time.time()), guild_id, user_id))
             res = await cur.fetchone()
             res = res[0]
             return res
@@ -640,11 +738,11 @@ class TicketCooldownStore(BaseStore):
     async def set_user_cooldown(self, guild_id: int, user_id: int, cooldown_in_secs: int,
                                 ticket: Optional[Ticket] = None) -> None:
         """Start a ticket cooldown. Set ticket=None to start a manual cooldown that is not associated with any
-        particular ticket.
+        particular ticket. Does not reset any existing ticket cooldowns. For that, see `reset_user_cooldown`.
         """
         ticket_id = None if ticket is None else ticket.id
         async with aiosqlite.connect(self.db_file) as con:
-            cooldown_ends_at = int(time.time()) + cooldown_in_secs
+            cooldown_ends_at = round(time.time()) + cooldown_in_secs
             statement = """INSERT OR REPLACE INTO
                         UserTicketCooldowns(guild_id, user_id, ticket_id, cooldown_ends_at)
                         VALUES (?, ?, ?, ?)"""
@@ -652,7 +750,7 @@ class TicketCooldownStore(BaseStore):
             await con.commit()
 
     async def reset_user_cooldown(self, guild_id: int, user_id: int) -> None:
-        """Reset the ticket cooldown of `user` in `guild` by removing all the cooldowns."""
+        """Reset the current ticket cooldown of `user` in `guild` by removing all the cooldowns."""
         async with aiosqlite.connect(self.db_file) as con:
             statement = """DELETE FROM UserTicketCooldowns WHERE guild_id=? AND user_id=?"""
             await con.execute(statement, (guild_id, user_id))

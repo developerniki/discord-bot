@@ -31,6 +31,8 @@ class ParseError(Exception):
 
 
 class Config:
+    """Contains the configurable values of the bot."""
+
     def __init__(
             self,
             token: str,
@@ -52,8 +54,6 @@ class Config:
         self.migr_dir = migr_dir
         self.db_file = db_file
         self.log_file = log_file
-
-        """Contains the configurable values of the bot."""
 
     @classmethod
     def parse(cls, root_dir: str | Path) -> Config:

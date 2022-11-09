@@ -40,12 +40,12 @@ class SlimBot(commands.Bot):
     async def do_migrations(self) -> None:
         """Do the database migrations by creating all the tables and moving the default settings to the DefaultSettings
         table."""
-        with open(self.config.migr_dir / '0__create_dbs.sql') as file:
-            sql_script = file.read()
+        sql_scripts = [path.read_text() for path in self.config.migr_dir.iterdir()]
 
         Path(self.config.db_file).parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.config.db_file) as con:
-            await con.executescript(sql_script)
+            for script in sql_scripts:
+                await con.executescript(script)
             await con.execute('DELETE FROM DefaultSettings')
             await con.executemany('INSERT INTO DefaultSettings (k, v) VALUES (?, ?)', self.config.defaults.items())
             await con.commit()

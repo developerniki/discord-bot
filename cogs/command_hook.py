@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any
 
 import discord
@@ -9,7 +10,7 @@ from slimbot import SlimBot, tools
 _logger = logging.getLogger(__name__)
 
 
-class CommandHook(commands.Cog, name='command_hook'):
+class CommandHook(commands.Cog, name='Command Hook'):
     """Logs the commands being used and handles command errors."""
 
     def __init__(self, bot: SlimBot) -> None:
@@ -26,23 +27,43 @@ class CommandHook(commands.Cog, name='command_hook'):
             # Has cog handler, so return.
             return
         elif isinstance(exception, commands.CommandNotFound):
-            _logger.warning(f'Command {ctx.command} was not found.')
-            await ctx.send(str(exception), ephemeral=True)
-            return
+            # Do some hacky stuff to print a prettier error message.
+            arg0 = exception.args[0] if exception.args else ''
+            command_search = re.fullmatch('Command "(.+)" is not found', arg0)
+            command = command_search.group(1) if command_search else None
+
+            if not command:
+                _logger.error('Something about the `commands.CommandNotFound` error message changed;'
+                              'the hack used in the command hook does not work anymore.')
+                return
+
+            # Repeating the command prefix should not be an error.
+            command_prefix = await self.bot.core_store.get_command_prefix(ctx.guild.id)
+            if re.match(f'{re.escape(command_prefix)}+', command):
+                return
+
+            # Finally, print the error message.
+            msg = 'Command '
+            if command is not None:
+                msg += f'`{command}` '
+            msg += 'was not found.'
+            _logger.info(msg)
+            await ctx.send(msg, ephemeral=True)
         elif isinstance(exception, commands.DisabledCommand):
-            _logger.warning(f'Command {ctx.command} is disabled.')
-            await ctx.send(str(exception), ephemeral=True)
+            msg = f'Command {ctx.command} is disabled.'
+            _logger.info(msg)
+            await ctx.send(msg, ephemeral=True)
         elif isinstance(exception, commands.NoPrivateMessage):
-            try:
-                _logger.warning(f'Command {ctx.command} cannot be used in private messages.')
-                await ctx.send(str(exception), ephemeral=True)
-            except discord.HTTPException:
-                pass
+            msg = f'Command {ctx.command} cannot be used in private messages.'
+            _logger.info(msg)
+            await ctx.send(msg, ephemeral=True)
         elif isinstance(exception, commands.MissingPermissions):
-            _logger.warning(f'The user has insufficient permissions to use {ctx.command}')
-            await ctx.send(str(exception), ephemeral=True)
+            msg = f'The user has insufficient permissions to use {ctx.command}'
+            _logger.warning(msg)
+            await ctx.send(msg, ephemeral=True)
         else:
             _logger.error(f'Ignoring exception `{str(exception)}` in command {ctx.command}.', exc_info=exception)
+            await ctx.send('There was an unexpected error!', ephemeral=True)
 
     @staticmethod
     def __command_string(ctx: commands.Context) -> str:

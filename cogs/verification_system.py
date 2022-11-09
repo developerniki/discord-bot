@@ -18,8 +18,8 @@ from slimbot.store import BaseStore
 _logger = logging.getLogger(__name__)
 
 
-class VerificationSystem(commands.GroupCog, name='verify'):
-    """A group cog that verifies new members on join and then welcomes them."""
+class VerificationSystem(commands.Cog, name='Verification System'):
+    """Asks new members to verify, notifies staff, assigns a verification role, and welcomes the member."""
 
     def __init__(self, bot: SlimBot) -> None:
         self.bot = bot
@@ -50,207 +50,199 @@ class VerificationSystem(commands.GroupCog, name='verify'):
 
             self._views_added = True
 
+    async def __create_verification_button(self, user: User | Member) -> bool:
+        """Creates the button to start the verification process for `user`.
+
+        Returns:
+            `True` if all necessary channels, messages, and roles are set up, `False` otherwise.
+        """
+        join_channel_id = await self.verification_settings_store.get_join_channel_id(user.guild.id)
+        join_channel = join_channel_id and user.guild.get_channel(join_channel_id)
+
+        join_message = await self.verification_settings_store.get_join_message(user.guild.id)
+
+        welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(user.guild.id)
+        welcome_channel = welcome_channel_id and user.guild.get_channel(welcome_channel_id)
+
+        welcome_message = await self.verification_settings_store.get_welcome_message(user.guild.id)
+
+        request_channel_id = await self.verification_settings_store.get_request_channel_id(user.guild.id)
+        request_channel = request_channel_id and user.guild.get_channel(request_channel_id)
+
+        role_id = await self.verification_settings_store.get_verification_role_id(user.guild.id)
+        role = role_id and user.guild.get_role(role_id)
+
+        if None in (join_channel, join_message, welcome_channel, welcome_message, request_channel, role):
+            _logger.warning('One of the necessary settings is not configured/not configured properly for the '
+                            'verification system to work!')
+            success = False
+            return success
+        else:
+            _logger.info(f'Making a verification button for {tools.user_string(user)}.')
+            verification_request_view = VerificationRequestView(self)
+            if '<user>' in join_message:
+                join_message = join_message.replace('<user>', user.mention)
+            else:
+                join_message = f'{user.mention} {join_message}'
+            description = join_message
+            embed = Embed(title=f'Welcome to {user.guild.name}!', description=description,
+                          color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
+            file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
+            embed.set_thumbnail(url='attachment://image.png')
+            await join_channel.send(embed=embed, file=file, view=verification_request_view)
+            success = True
+            return success
+
     @commands.Cog.listener()
     async def on_member_join(self, member: Member) -> None:
         _logger.info(f'{tools.user_string(member)} joined the server!')
-        welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(member.guild.id)
-        welcome_channel = welcome_channel_id and member.guild.get_channel(welcome_channel_id)
-
-        verified_welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(member.guild.id)
-        verified_welcome_channel = welcome_channel_id and member.guild.get_channel(verified_welcome_channel_id)
-
-        verified_welcome_message = await self.verification_settings_store.get_verified_welcome_message(member.guild.id)
-
-        request_channel_id = await self.verification_settings_store.get_request_channel_id(member.guild.id)
-        request_channel = request_channel_id and member.guild.get_channel(request_channel_id)
-
-        role_id = await self.verification_settings_store.get_role_id(member.guild.id)
-        role = role_id and member.guild.get_role(role_id)
-
-        if None in (welcome_channel, verified_welcome_channel, verified_welcome_message, request_channel, role):
-            _logger.warning('One of the necessary settings is not configured/not configured properly for the '
-                            'verification system to work!')
-            return
-        elif member.bot:
+        if member.bot:
             _logger.info(f'{tools.user_string(member)} is a bot, so not making a verification button.')
         else:
-            _logger.info(f'Making a verification button for {tools.user_string(member)}.')
-            verification_request_view = VerificationRequestView(self)
-            description = f'Nice to have you, {member.mention}! To have access to the rest of the server, ' \
-                          'please click on the button below and complete the verification process.'
-            embed = Embed(title=f'Welcome to {member.guild.name}!', description=description,
-                          color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
-            file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
-            embed.set_thumbnail(url='attachment://image.png')
-            await welcome_channel.send(embed=embed, file=file, view=verification_request_view)
+            await self.__create_verification_button(member)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_roles=True)
-    async def verification_button(self, ctx: commands.Context, user: User):
+    @commands.hybrid_group()
+    @commands.has_guild_permissions(manage_roles=True, manage_channels=True)
+    async def verification(self, ctx):
+        pass
+
+    @verification.command()
+    async def button(self, ctx: commands.Context, user: User):
         """Create a verification button for `user`."""
-        welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(ctx.guild.id)
-        welcome_channel = welcome_channel_id and ctx.guild.get_channel(welcome_channel_id)
-
-        verified_welcome_channel_id = await self.verification_settings_store.get_welcome_channel_id(ctx.guild.id)
-        verified_welcome_channel = welcome_channel_id and ctx.guild.get_channel(verified_welcome_channel_id)
-
-        verified_welcome_message = await self.verification_settings_store.get_verified_welcome_message(ctx.guild.id)
-
-        request_channel_id = await self.verification_settings_store.get_request_channel_id(ctx.guild.id)
-        request_channel = request_channel_id and ctx.guild.get_channel(request_channel_id)
-
-        role_id = await self.verification_settings_store.get_role_id(ctx.guild.id)
-        role = role_id and ctx.guild.get_role(role_id)
-
-        if None in (welcome_channel, verified_welcome_channel, verified_welcome_message, request_channel, role):
-            await ctx.send(
-                'Cannot create a button. First, configure the necessary settings using the '
-                '`/setup_verification_system` command.',
-                ephemeral=True
-            )
+        success = await self.__create_verification_button(user)
+        if not success:
+            await ctx.send('Cannot create a button. First, configure the necessary settings using the '
+                           '`/verification setup` command.', ephemeral=True)
         else:
-            verification_request_view = VerificationRequestView(self)
-            description = f'Nice to have you, {user.mention}! To have access to the rest of the server, ' \
-                          'please click on the button below and complete the verification process.'
-            embed = Embed(title=f'Welcome to {ctx.guild.name}!', description=description,
-                          color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
-            file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
-            embed.set_thumbnail(url='attachment://image.png')
-            await ctx.send(embed=embed, file=file, view=verification_request_view)
+            join_channel_id = await self.verification_settings_store.get_join_channel_id(ctx.guild.id)
+            join_channel = join_channel_id and ctx.guild.get_channel(join_channel_id)
+            await ctx.send(f'Created a verification button at {join_channel.mention}')
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def setup_verification_system(self, ctx: commands.Context,
-                                        welcome_channel: TextChannel,
-                                        verified_welcome_channel: TextChannel,
-                                        verified_welcome_message: str,
-                                        verification_request_channel: TextChannel,
-                                        verification_role: Role) -> None:
+    @verification.command()
+    async def setup(self, ctx: commands.Context, join_channel: TextChannel, join_message: str,
+                    welcome_channel: TextChannel, welcome_message: str, request_channel: TextChannel,
+                    verification_role: Role) -> None:
         """Set up all necessary channels and roles for the verification system to work."""
+        await self.verification_settings_store.set_join_channel_id(
+            guild_id=ctx.guild.id,
+            channel_id=join_channel.id
+        )
+        await self.verification_settings_store.set_join_message(
+            guild_id=ctx.guild.id,
+            message=join_message
+        )
         await self.verification_settings_store.set_welcome_channel_id(
             guild_id=ctx.guild.id,
             channel_id=welcome_channel.id
         )
-        await self.verification_settings_store.set_verified_welcome_channel_id(
+        await self.verification_settings_store.set_welcome_message(
             guild_id=ctx.guild.id,
-            channel_id=verified_welcome_channel.id
-        )
-        await self.verification_settings_store.set_verified_welcome_message(
-            guild_id=ctx.guild.id,
-            message=verified_welcome_message
+            message=welcome_message
         )
         await self.verification_settings_store.set_request_channel_id(
             guild_id=ctx.guild.id,
-            channel_id=verification_request_channel.id
+            channel_id=request_channel.id
         )
-        await self.verification_settings_store.set_role_id(
+        await self.verification_settings_store.set_verification_role_id(
             guild_id=ctx.guild.id,
             role_id=verification_role.id
         )
         await ctx.send('Everything set up for the verification system to work!', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def get_welcome_channel(self, ctx: commands.Context) -> None:
-        """Get the welcome channel."""
-        channel_id = await self.verification_settings_store.get_welcome_channel_id(ctx.guild.id)
-        channel = channel_id and ctx.guild.get_channel(channel_id)
+    @verification.command()
+    async def joinchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
+        """Get or set the join channel, depending on whether `channel` is present."""
         if channel is None:
-            await ctx.send(f'The welcome channel is not configured yet.', ephemeral=True)
+            channel_id = await self.verification_settings_store.get_join_channel_id(ctx.guild.id)
+            channel = channel_id and ctx.guild.get_channel(channel_id)
+            if channel is None:
+                await ctx.send(f'The join channel is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The join channel is {channel.mention}.', ephemeral=True)
         else:
-            await ctx.send(f'The welcome channel is {channel.mention}.', ephemeral=True)
+            await self.verification_settings_store.set_join_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
+            await ctx.send(f'The join channel has been set to {channel.mention}.', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def set_welcome_channel(self, ctx: commands.Context, channel: TextChannel) -> None:
-        """Set the welcome channel."""
-        await self.verification_settings_store.set_welcome_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
-        await ctx.send(f'The welcome channel has been set to {channel.mention}.', ephemeral=True)
-
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def get_verified_welcome_channel(self, ctx: commands.Context) -> None:
-        """Get the verified welcome channel used to welcome the user with more information after verification."""
-        channel_id = await self.verification_settings_store.get_verified_welcome_channel_id(ctx.guild.id)
-        channel = channel_id and ctx.guild.get_channel(channel_id)
-        if channel is None:
-            await ctx.send(f'The verified welcome channel is not configured yet.', ephemeral=True)
-        else:
-            await ctx.send(f'The verified welcome channel is {channel.mention}.', ephemeral=True)
-
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def set_verified_welcome_channel(self, ctx: commands.Context, channel: TextChannel) -> None:
-        """Set the verified welcome channel used to welcome the user with more information after verification."""
-        await self.verification_settings_store.set_verified_welcome_channel_id(guild_id=ctx.guild.id,
-                                                                               channel_id=channel.id)
-        await ctx.send(f'The verified welcome channel has been set to {channel.mention}.', ephemeral=True)
-
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def get_verified_welcome_message(self, ctx: commands.Context) -> None:
-        """Get the verified welcome message used to welcome verified users."""
-        message = await self.verification_settings_store.get_verified_welcome_message(ctx.guild.id)
+    @verification.command()
+    async def joinmessage(self, ctx: commands.Context, message: Optional[str]) -> None:
+        """Get or set the join message, depending on whether `message` is present."""
         if message is None:
-            await ctx.send(f'The verified welcome message is not configured yet.', ephemeral=True)
+            message = await self.verification_settings_store.get_welcome_message(ctx.guild.id)  # TODO
+            if message is None:
+                await ctx.send(f'The join message is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The join message is `{message}`.', ephemeral=True)
         else:
-            await ctx.send(f'The verified welcome message is `{message}`.', ephemeral=True)
+            await self.verification_settings_store.set_welcome_message(guild_id=ctx.guild.id, message=message)
+            await ctx.send(f'The join message has been set to `{message}`.', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def set_verified_welcome_message(self, ctx: commands.Context, message: str) -> None:
-        """Set the verified welcome message used to welcome verified users."""
-        await self.verification_settings_store.set_verified_welcome_message(guild_id=ctx.guild.id, message=message)
-        await ctx.send(f'The verified welcome message has been set to `{message}`.', ephemeral=True)
-
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def get_verification_request_channel(self, ctx: commands.Context) -> None:
-        """Get the verification request channel."""
-        channel_id = await self.verification_settings_store.get_request_channel_id(ctx.guild.id)
-        channel = channel_id and ctx.guild.get_channel(channel_id)
+    @verification.command()
+    async def welcomechannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
+        """Get or set the welcome channel, depending on whether `channel` is present."""
         if channel is None:
-            await ctx.send(f'The verification request channel is not configured yet.', ephemeral=True)
+            channel_id = await self.verification_settings_store.get_welcome_channel_id(ctx.guild.id)
+            channel = channel_id and ctx.guild.get_channel(channel_id)
+            if channel is None:
+                await ctx.send(f'The welcome channel is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The welcome channel is {channel.mention}.', ephemeral=True)
         else:
-            await ctx.send(f'The verification request channel is {channel.mention}.', ephemeral=True)
+            await self.verification_settings_store.set_welcome_channel_id(guild_id=ctx.guild.id,
+                                                                          channel_id=channel.id)
+            await ctx.send(f'The welcome channel has been set to {channel.mention}.', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def set_verification_request_channel(self, ctx: commands.Context, channel: TextChannel) -> None:
-        """Set the verification request channel."""
-        await self.verification_settings_store.set_request_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
-        await ctx.send(f'The verification request channel has been set to {channel.mention}.', ephemeral=True)
+    @verification.command()
+    async def welcomemessage(self, ctx: commands.Context, message: Optional[str]) -> None:
+        """Get or set the welcome message, depending on whether `message` is present."""
+        if message is None:
+            message = await self.verification_settings_store.get_welcome_message(ctx.guild.id)
+            if message is None:
+                await ctx.send(f'The welcome message is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The welcome message is `{message}`.', ephemeral=True)
+        else:
+            await self.verification_settings_store.set_welcome_message(guild_id=ctx.guild.id, message=message)
+            await ctx.send(f'The welcome message has been set to `{message}`.', ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def get_verification_role(self, ctx: commands.Context) -> None:
-        """Get the verification request role."""
-        role_id = await self.verification_settings_store.get_role_id(ctx.guild.id)
-        role = role_id and ctx.guild.get_role(role_id)
+    @verification.command()
+    async def requestchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
+        """Get or set the verification request channel, depending on whether `channel` is present."""
+        if channel is None:
+            channel_id = await self.verification_settings_store.get_request_channel_id(ctx.guild.id)
+            channel = channel_id and ctx.guild.get_channel(channel_id)
+            if channel is None:
+                await ctx.send(f'The verification request channel is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The verification request channel is {channel.mention}.', ephemeral=True)
+        else:
+            await self.verification_settings_store.set_request_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
+            await ctx.send(f'The verification request channel has been set to {channel.mention}.', ephemeral=True)
+
+    @verification.command()
+    async def role(self, ctx: commands.Context, role: Optional[Role]) -> None:
+        """Get or set the verification role, depending on whether `role` is present."""
         if role is None:
-            await ctx.send(f'The verification role is not configured yet.', ephemeral=True)
+            role_id = await self.verification_settings_store.get_verification_role_id(ctx.guild.id)
+            role = role_id and ctx.guild.get_role(role_id)
+            if role is None:
+                await ctx.send(f'The verification role is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The verification role is {role.mention}.', ephemeral=True)
         else:
-            await ctx.send(f'The verification role is {role.mention}.', ephemeral=True)
-
-    @commands.hybrid_command()
-    @commands.has_guild_permissions(manage_channels=True)
-    async def set_verification_role(self, ctx: commands.Context, role: Role) -> None:
-        """Set the verification request role."""
-        await self.verification_settings_store.set_role_id(guild_id=ctx.guild.id, role_id=role.id)
-        await ctx.send(f'The verification request channel has been set to {role.mention}.', ephemeral=True)
+            await self.verification_settings_store.set_verification_role_id(guild_id=ctx.guild.id, role_id=role.id)
+            await ctx.send(f'The verification request channel has been set to {role.mention}.', ephemeral=True)
 
 
 class VerificationRequest:
     """The in-memory representation of a user verification in the database."""
 
-    def __init__(self, user_verification_id: int, guild_id: int, user_id: int, welcome_channel_id: int,
-                 welcome_message_id: int, verified: bool,
-                 joined_at: int, closed_at: Optional[int]) -> None:
+    def __init__(self, user_verification_id: int, guild_id: int, user_id: int, join_channel_id: int,
+                 join_message_id: int, verified: bool, joined_at: int, closed_at: Optional[int]) -> None:
         self.id = user_verification_id
         self.guild_id = guild_id
         self.user_id = user_id
-        self.welcome_channel_id = welcome_channel_id
-        self.welcome_message_id = welcome_message_id
+        self.join_channel_id = join_channel_id
+        self.join_message_id = join_message_id
         self.verified = verified
         self.joined_at = joined_at
         self.closed_at = closed_at
@@ -262,6 +254,20 @@ class VerificationSettingStore(BaseStore):
     def __init__(self, db_file: Path) -> None:
         super().__init__(db_file)
 
+    async def get_join_channel_id(self, guild_id: int) -> int:
+        channel_id = await self.get_setting(guild_id, 'join_channel_id')
+        return channel_id
+
+    async def set_join_channel_id(self, guild_id: int, channel_id: int) -> None:
+        await self.set_setting(guild_id, 'join_channel_id', channel_id)
+
+    async def get_join_message(self, guild_id: int) -> str:
+        message = await self.get_setting(guild_id, 'join_message')
+        return message
+
+    async def set_join_message(self, guild_id: int, message: str) -> None:
+        await self.set_setting(guild_id, 'join_message', message)
+
     async def get_welcome_channel_id(self, guild_id: int) -> int:
         channel_id = await self.get_setting(guild_id, 'welcome_channel_id')
         return channel_id
@@ -269,19 +275,12 @@ class VerificationSettingStore(BaseStore):
     async def set_welcome_channel_id(self, guild_id: int, channel_id: int) -> None:
         await self.set_setting(guild_id, 'welcome_channel_id', channel_id)
 
-    async def get_verified_welcome_channel_id(self, guild_id: int) -> int:
-        channel_id = await self.get_setting(guild_id, 'verified_welcome_channel_id')
-        return channel_id
-
-    async def set_verified_welcome_channel_id(self, guild_id: int, channel_id: int) -> None:
-        await self.set_setting(guild_id, 'verified_welcome_channel_id', channel_id)
-
-    async def get_verified_welcome_message(self, guild_id: int) -> str:
-        message = await self.get_setting(guild_id, 'verified_welcome_message')
+    async def get_welcome_message(self, guild_id: int) -> str:
+        message = await self.get_setting(guild_id, 'welcome_message')
         return message
 
-    async def set_verified_welcome_message(self, guild_id: int, message: str) -> None:
-        await self.set_setting(guild_id, 'verified_welcome_message', message)
+    async def set_welcome_message(self, guild_id: int, message: str) -> None:
+        await self.set_setting(guild_id, 'welcome_message', message)
 
     async def get_request_channel_id(self, guild_id: int) -> int:
         channel_id = await self.get_setting(guild_id, 'verification_request_channel_id')
@@ -290,12 +289,12 @@ class VerificationSettingStore(BaseStore):
     async def set_request_channel_id(self, guild_id: int, channel_id: int) -> None:
         await self.set_setting(guild_id, 'verification_request_channel_id', channel_id)
 
-    async def get_role_id(self, guild_id: int) -> int:
-        channel_id = await self.get_setting(guild_id, 'verified_role_id')
+    async def get_verification_role_id(self, guild_id: int) -> int:
+        channel_id = await self.get_setting(guild_id, 'verification_role_id')
         return channel_id
 
-    async def set_role_id(self, guild_id: int, role_id: int) -> None:
-        await self.set_setting(guild_id, 'verified_role_id', role_id)
+    async def set_verification_role_id(self, guild_id: int, role_id: int) -> None:
+        await self.set_setting(guild_id, 'verification_role_id', role_id)
 
 
 class VerificationRequestStore(BaseStore):
@@ -304,33 +303,33 @@ class VerificationRequestStore(BaseStore):
     def __init__(self, db_file: Path) -> None:
         super().__init__(db_file)
 
-    async def create(self, guild_id: int, user_id: int, welcome_channel_id: int,
-                     welcome_message_id: int) -> VerificationRequest:
+    async def create(self, guild_id: int, user_id: int, join_channel_id: int,
+                     join_message_id: int) -> VerificationRequest:
         async with aiosqlite.connect(self.db_file) as con:
             statement = """INSERT INTO
                         VerificationRequests(
                             guild_id,
                             user_id,
-                            welcome_channel_id,
-                            welcome_message_id,
+                            join_channel_id,
+                            join_message_id,
                             verified,
                             joined_at
                         )
                         VALUES (?, ?, ?, ?, FALSE, ?)
                         """
-            joined_at = tools.unix_seconds_from_discord_snowflake_id(welcome_message_id)
-            cur = await con.execute(statement, (guild_id, user_id, welcome_channel_id, welcome_message_id, joined_at))
+            joined_at = tools.unix_seconds_from_discord_snowflake_id(join_message_id)
+            cur = await con.execute(statement, (guild_id, user_id, join_channel_id, join_message_id, joined_at))
             await con.commit()
             user_verification = VerificationRequest(user_verification_id=cur.lastrowid, guild_id=guild_id,
-                                                    user_id=user_id, welcome_channel_id=welcome_channel_id,
-                                                    welcome_message_id=welcome_message_id, verified=False,
+                                                    user_id=user_id, join_channel_id=join_channel_id,
+                                                    join_message_id=join_message_id, verified=False,
                                                     joined_at=joined_at, closed_at=None)
             return user_verification
 
     async def close(self, verification_request: VerificationRequest, verified: bool) -> None:
         async with aiosqlite.connect(self.db_file) as con:
             statement = """UPDATE VerificationRequests SET verified=?, closed_at=? WHERE id=?"""
-            closed_at = int(time.time())
+            closed_at = round(time.time())
             await con.execute(statement, (verified, closed_at, verification_request.id))
             await con.commit()
             verification_request.verified = verified
@@ -345,21 +344,21 @@ class VerificationRequestStore(BaseStore):
                     user_verification_id=user_verification_id,
                     guild_id=guild_id,
                     user_id=user_id,
-                    welcome_channel_id=welcome_channel_id,
-                    welcome_message_id=welcome_message_id,
+                    join_channel_id=join_channel_id,
+                    join_message_id=join_message_id,
                     verified=verified,
                     joined_at=joined_at,
                     closed_at=closed_at
                 )
                 for
-                user_verification_id, guild_id, user_id, welcome_channel_id, welcome_message_id, verified, joined_at, closed_at
+                user_verification_id, guild_id, user_id, join_channel_id, join_message_id, verified, joined_at, closed_at
                 in verification_requests_raw
             ]
             return verification_requests
 
 
 class MissingWelcomeMessageError(Exception):
-    """Exception raised when the welcome message for a particular verification request is missing."""
+    """Raised when the welcome message for a particular verification request is missing."""
     pass
 
 
@@ -450,13 +449,13 @@ class ChooseBasicInfoView(ui.View):
         await interaction.response.defer()
 
     async def submit(self, interaction: Interaction) -> None:
-        # Get the welcome message. First, look if it is available in cache, otherwise, fetch it.
+        # Get the join message. First, look if it is available in cache, otherwise, fetch it.
         if interaction.message.reference is not None:
             if interaction.message.reference.cached_message is None:
                 channel = self.vs.bot.get_channel(interaction.message.reference.channel_id)
-                welcome_message = await channel.fetch_message(interaction.message.reference.message_id)
+                join_message = await channel.fetch_message(interaction.message.reference.message_id)
             else:
-                welcome_message = interaction.message.reference.cached_message
+                join_message = interaction.message.reference.cached_message
         else:
             raise MissingWelcomeMessageError()
 
@@ -471,7 +470,7 @@ class ChooseBasicInfoView(ui.View):
             await interaction.response.send_message(content='Please fill out both fields!', ephemeral=True)
 
         choose_advanced_info_modal = ChooseAdvancedInfoModal(verification_system=self.vs, age_range=age_range,
-                                                             gender=gender, welcome_message=welcome_message)
+                                                             gender=gender, welcome_message=join_message)
         await interaction.response.send_modal(choose_advanced_info_modal)
         await interaction.edit_original_response(content='To retry, click the `Verify me!` button again.', view=None)
 
@@ -520,8 +519,8 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         verification_request = await self.vs.verification_request_store.create(
             guild_id=interaction.guild_id,
             user_id=interaction.user.id,
-            welcome_channel_id=self.welcome_message.channel.id,
-            welcome_message_id=self.welcome_message.id,
+            join_channel_id=self.welcome_message.channel.id,
+            join_message_id=self.welcome_message.id,
         )
 
         # Create the verification notification embed.
@@ -605,7 +604,7 @@ class VerificationNotificationView(ui.View):
 
             # Assign the verification role to the user.
             # TODO Assign the other roles (gender and age-range).
-            role_id = await self.vs.verification_settings_store.get_role_id(interaction.guild_id)
+            role_id = await self.vs.verification_settings_store.get_verification_role_id(interaction.guild_id)
             role = interaction.guild.get_role(role_id)
             try:
                 await member.add_roles(role, reason='verify the user')
@@ -619,15 +618,15 @@ class VerificationNotificationView(ui.View):
             # Store the decision to verify the user in the database.
             await self.vs.verification_request_store.close(self.verification_request, True)
 
-            # Welcome the user with additional information in the verified welcome channel.
-            verified_welcome_channel_id = await self.vs.verification_settings_store.get_verified_welcome_channel_id(
+            # Welcome the user with additional information.
+            welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
                 interaction.guild_id
             )
-            verified_welcome_channel = interaction.guild.get_channel(verified_welcome_channel_id)
-            verified_welcome_message = await self.vs.verification_settings_store.get_verified_welcome_message(
+            welcome_channel = interaction.guild.get_channel(welcome_channel_id)
+            welcome_message = await self.vs.verification_settings_store.get_welcome_message(
                 interaction.guild_id
             )
-            description = verified_welcome_message.replace('<user>', member.mention)
+            description = welcome_message.replace('<user>', member.mention)
             # embed = Embed(title=f'Welcome to {interaction.guild.name}!',
             #               description=description,
             #               color=discord.Color.green(),
@@ -637,15 +636,14 @@ class VerificationNotificationView(ui.View):
             #                  icon_url=interaction.user.display_avatar)
             # file = discord.File(self.vs.bot.img_dir / 'welcome2.png', filename='image.png')
             # embed.set_thumbnail(url='attachment://image.png')
-            await verified_welcome_channel.send(content=description)
+            await welcome_channel.send(content=description)
 
-            # Remove the welcome message from the first welcome channel.
-            # At this point, if it does not exist, we do not care.
-            welcome_channel_id = self.verification_request.welcome_channel_id
-            welcome_channel = self.vs.bot.get_channel(welcome_channel_id)
-            welcome_message = await welcome_channel.fetch_message(self.verification_request.welcome_message_id)
-            if welcome_message is not None:
-                await welcome_message.delete()
+            # Remove the welcome message from the join channel. At this point, if it does not exist, we do not care.
+            join_channel_id = self.verification_request.join_channel_id
+            join_channel = self.vs.bot.get_channel(join_channel_id)
+            join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
+            if join_message is not None:
+                await join_message.delete()
 
             # Stop listening to the view and deactivate it.
             self.stop()
@@ -716,16 +714,13 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
         # Store the decision to not verify the user in the database.
         await self.vs.verification_request_store.close(self.verification_request, False)
 
-        # Remove the welcome message from the first welcome channel.
-        # At this point, if it does not exist, we do not care.
-        welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
-            guild_id=interaction.guild_id
-        )
-        welcome_channel = self.vs.bot.get_channel(welcome_channel_id)
-        if welcome_channel is not None:
-            welcome_message = await welcome_channel.fetch_message(self.verification_request.welcome_message_id)
-            if welcome_message is not None:
-                await welcome_message.delete()
+        # Remove the join message from the join channel. At this point, if it does not exist, we do not care.
+        join_channel_id = await self.vs.verification_settings_store.get_join_channel_id(guild_id=interaction.guild_id)
+        join_channel = self.vs.bot.get_channel(join_channel_id)
+        if join_channel is not None:
+            join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
+            if join_message is not None:
+                await join_message.delete()
 
         # Modify verification notification message.
         # The lock and `is_finished()` call ensure that the view is only responded to once.

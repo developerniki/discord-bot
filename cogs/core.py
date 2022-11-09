@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import discord
 from discord.ext import commands
@@ -8,28 +9,26 @@ from slimbot import SlimBot, tools
 _logger = logging.getLogger(__name__)
 
 
-class Core(commands.Cog, name='core'):
-    """This cog contains the core functionality of the bot."""
+class Core(commands.Cog, name='Core'):
+    """Contains the core functionality of the bot."""
 
     def __init__(self, bot: SlimBot) -> None:
         self.bot = bot
 
-    @commands.hybrid_command(name='get_command_prefix')
-    async def _get_command_prefix(self, ctx: commands.Context) -> None:
-        """Get the command prefix."""
-        command_prefix = await self.bot.core_store.get_command_prefix(ctx.guild.id)
-        await ctx.send(f"The server's command prefix is `{command_prefix}`.", ephemeral=True)
-
-    @commands.hybrid_command(name='set_command_prefix')
+    @commands.hybrid_command(name='prefix')
     @commands.has_guild_permissions(administrator=True)
-    async def _set_command_prefix(self, ctx: commands.Context, command_prefix: str) -> None:
-        """Set the command prefix."""
-        await self.bot.core_store.set_command_prefix(guild_id=ctx.guild.id, command_prefix=command_prefix)
-        await ctx.send(f'Server command prefix set to `{command_prefix}`.', ephemeral=True)
+    async def prefix(self, ctx: commands.Context, prefix: Optional[str]) -> None:
+        """Get or set the command prefix, depending on whether `prefix` is present."""
+        if prefix is None:
+            prefix = await self.bot.core_store.get_command_prefix(ctx.guild.id)
+            await ctx.send(f"The server's command prefix is `{prefix}`.", ephemeral=True)
+        else:
+            await self.bot.core_store.set_command_prefix(guild_id=ctx.guild.id, command_prefix=prefix)
+            await ctx.send(f'Server command prefix set to `{prefix}`.', ephemeral=True)
 
-    @commands.hybrid_command(name='get_extensions', hidden=True)
+    @commands.hybrid_command()
     @commands.has_guild_permissions(administrator=True)
-    async def _get_extensions(self, ctx: commands.Context):
+    async def extensions(self, ctx: commands.Context):
         """Get the available extensions and their loaded status."""
 
         def ext_str(ext: str, loaded: bool):
@@ -41,9 +40,9 @@ class Core(commands.Cog, name='core'):
         embed = discord.Embed(title='Extensions', description=extensions_str, color=discord.Color.purple())
         await ctx.send(embed=embed, ephemeral=True)
 
-    @commands.hybrid_command(name='load', hidden=True)
+    @commands.hybrid_command()
     @commands.has_guild_permissions(administrator=True)
-    async def _load_extension(self, ctx: commands.Context, name: str):
+    async def load(self, ctx: commands.Context, name: str):
         """Loads an extension."""
         try:
             await self.bot.load_extension(f'{self.bot.config.ext_dir.name}.{name}')
@@ -84,9 +83,9 @@ class Core(commands.Cog, name='core'):
             )
             await ctx.send(embed=embed, ephemeral=True)
 
-    @commands.hybrid_command(name='unload', hidden=True)
+    @commands.hybrid_command()
     @commands.has_guild_permissions(administrator=True)
-    async def _unload_extension(self, ctx: commands.Context, name: str):
+    async def unload(self, ctx: commands.Context, name: str):
         """Unloads an extension."""
         try:
             await self.bot.unload_extension(f'{self.bot.config.ext_dir.name}.{name}')
@@ -110,9 +109,9 @@ class Core(commands.Cog, name='core'):
                                   description=f'Extension **{name}** is already unloaded.', color=discord.Color.red())
             await ctx.send(embed=embed, ephemeral=True)
 
-    @commands.hybrid_command(name='reload', hidden=True)
+    @commands.hybrid_command()
     @commands.has_guild_permissions(administrator=True)
-    async def _reload_extension(self, ctx: commands.Context, name: str):
+    async def reload(self, ctx: commands.Context, name: str):
         """Reloads an extension."""
         try:
             await self.bot.reload_extension(f'{self.bot.config.ext_dir.name}.{name}')
@@ -153,9 +152,9 @@ class Core(commands.Cog, name='core'):
             )
             await ctx.send(embed=embed, ephemeral=True)
 
-    @commands.hybrid_command(name='sync', hidden=True)
+    @commands.hybrid_command()
     @commands.has_guild_permissions(administrator=True)
-    async def _sync_commands(self, ctx: commands.Context):
+    async def sync(self, ctx: commands.Context):
         """Syncs all commands."""
         await self.bot.tree.sync()
         embed = discord.Embed(title='Sync', description=f'Synced all commands.', color=discord.Color.purple())

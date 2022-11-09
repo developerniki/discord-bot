@@ -9,8 +9,8 @@ from slimbot import SlimBot, tools
 _logger = logging.getLogger(__name__)
 
 
-class Moderation(commands.Cog, name='moderation'):
-    """A cog to help with simple moderation tasks."""
+class Moderation(commands.Cog, name='Moderation'):
+    """Help with simple moderation tasks."""
 
     def __init__(self, bot: SlimBot) -> None:
         self.bot = bot

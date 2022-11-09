@@ -14,8 +14,8 @@ from slimbot import SlimBot, tools
 _logger = logging.getLogger(__name__)
 
 
-class Fun(commands.Cog, name='fun'):
-    """A cog for fun gimmicks."""
+class Fun(commands.Cog, name='Fun'):
+    """Contains fun gimmicks."""
 
     def __init__(self, bot: SlimBot) -> None:
         self.bot = bot

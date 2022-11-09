@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS Tickets(
     reason VARCHAR,
     status VARCHAR CHECK (status IN ("open", "closed")),
     channel_id BIGINT,
-    log VARCHAR,
+    log VARCHAR, -- store JSON data in here
     created_at BIGINT,
     closed_at BIGINT
 );
@@ -48,8 +48,8 @@ CREATE TABLE IF NOT EXISTS VerificationRequests(
     id INTEGER PRIMARY KEY,
     guild_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
-    welcome_channel_id BIGINT NOT NULL, -- if the verification button was created manually, this does not have to refer to the server's welcome channel
-    welcome_message_id BIGINT NOT NULL,
+    join_channel_id BIGINT NOT NULL, -- if the verification button was created manually, this does not have to refer to the server's welcome channel
+    join_message_id BIGINT NOT NULL,
     verified BOOLEAN NOT NULL CHECK (verified IN (FALSE, TRUE)),
     joined_at BIGINT NOT NULL,
     closed_at BIGINT
