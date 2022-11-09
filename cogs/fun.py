@@ -73,6 +73,18 @@ class Fun(commands.Cog, name='Fun'):
         cat_picture_url = await fetch_cat_picture_url()
         await ctx.send(cat_picture_url)
 
+    @commands.hybrid_command()
+    async def choice(self, ctx: commands.Context, *, choices: str):
+        """Make the bot choose between `n` comma-separated choices."""
+        choices = choices.split(',')
+        if len(choices) < 2:
+            await ctx.send('Please write at least two coma-separated options.')
+        else:
+            await ctx.send(
+                'Eeny, meeny, miny, moe, Catch a tiger by the toe. If he hollers, let him go, Eeny, meeny, miny, moe. '
+                f'I choose... ```{random.choices(choices)}```'
+            )
+
 
 class PatternToAction:
     def __init__(self, pattern: str, reactions: List[str], responses: List[str]) -> None:
