@@ -116,7 +116,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         else:
             join_channel_id = await self.verification_settings_store.get_join_channel_id(ctx.guild.id)
             join_channel = join_channel_id and ctx.guild.get_channel(join_channel_id)
-            await ctx.send(f'Created a verification button at {join_channel.mention}')
+            await ctx.send(f'Created a verification button at {join_channel.mention}.', ephemeral=True)
 
     @verification.command()
     async def setup(self, ctx: commands.Context, join_channel: TextChannel, join_message: str,
