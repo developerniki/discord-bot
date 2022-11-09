@@ -167,13 +167,13 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     async def joinmessage(self, ctx: commands.Context, message: Optional[str]) -> None:
         """Get or set the join message, depending on whether `message` is present."""
         if message is None:
-            message = await self.verification_settings_store.get_welcome_message(ctx.guild.id)  # TODO
+            message = await self.verification_settings_store.get_join_message(ctx.guild.id)  # TODO
             if message is None:
                 await ctx.send(f'The join message is not configured yet.', ephemeral=True)
             else:
                 await ctx.send(f'The join message is `{message}`.', ephemeral=True)
         else:
-            await self.verification_settings_store.set_welcome_message(guild_id=ctx.guild.id, message=message)
+            await self.verification_settings_store.set_join_message(guild_id=ctx.guild.id, message=message)
             await ctx.send(f'The join message has been set to `{message}`.', ephemeral=True)
 
     @verification.command()
