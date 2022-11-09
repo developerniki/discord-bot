@@ -166,7 +166,9 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                 created_at = datetime.fromtimestamp(ticket.created_at).strftime(time_fmt)
                 closed_at = datetime.fromtimestamp(ticket.closed_at).strftime(time_fmt)
 
-                header = f'Transcript of ticket #{ticket.id}, created at {created_at} for {ticket.user_id}'
+                ticket_user = self.bot.get_user(ticket.user_id)
+                header = f'Transcript of ticket #{ticket.id}, created at {created_at} for ' \
+                         f'user {tools.user_string(ticket_user)}'
                 if ticket.reason:
                     header += f' with reason "{ticket.reason}" '
                 header += f'and closed at {closed_at}\n'
