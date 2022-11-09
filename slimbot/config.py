@@ -17,7 +17,7 @@ command_prefix = '?'
 ticket_cooldown = 3600
 
 [paths]
-database = 'data.db'
+database = 'database/data.db'
 log = 'logs/slimbot.log'
 cogs = 'cogs'
 images = 'images'
