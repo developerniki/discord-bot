@@ -16,7 +16,7 @@ class Help(commands.Cog, name='Help'):
         self.bot.remove_command('help')
 
     @commands.hybrid_command()
-    async def help(self, ctx: commands.Context, cog: Optional[str]) -> None:
+    async def help(self, ctx: commands.Context, *, cog: Optional[str]) -> None:
         """Shows descriptions of all bot modules and commands."""
         if cog is None:
             embed = discord.Embed(title='Commands & Modules',
