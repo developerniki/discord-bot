@@ -82,7 +82,7 @@ class Fun(commands.Cog, name='Fun'):
         else:
             await ctx.send(
                 'Eeny, meeny, miny, moe, Catch a tiger by the toe. If he hollers, let him go, Eeny, meeny, miny, moe. '
-                f'I choose... ```{random.choices(choices)}```'
+                f'I choose... ```{random.choice(choices).strip()}```'
             )
 
 
