@@ -4,6 +4,7 @@ import random
 import re
 from typing import List, Optional
 
+import emoji
 import toml
 from discord import Message, User
 from discord.ext import commands
@@ -80,8 +81,11 @@ class Fun(commands.Cog, name='Fun'):
         if len(choices) < 2:
             await ctx.send('Please write at least two coma-separated options.')
         else:
+            dance_emojis = [':sparkles:', ':man_dancing:', ':woman_dancing:', ':musical_notes:',
+                            ':person_cartwheeling:']
             await ctx.send(
-                'Eeny, meeny, miny, moe, Catch a tiger by the toe. If he hollers, let him go, Eeny, meeny, miny, moe. '
+                f'{emoji.emojize(random.choice(dance_emojis))} '
+                'Eeny, meeny, miny, moe. Catch a tiger by the toe. If he hollers, let him go. Eeny, meeny, miny, moe. '
                 f'I choose... ```{random.choice(choices).strip()}```'
             )
 
