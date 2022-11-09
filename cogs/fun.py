@@ -82,7 +82,7 @@ class Fun(commands.Cog, name='Fun'):
             await ctx.send('Please write at least two coma-separated options.')
         else:
             dance_emojis = [':sparkles:', ':man_dancing:', ':woman_dancing:', ':musical_notes:',
-                            ':person_cartwheeling:']
+                            ':person_cartwheeling:', ':people_with_bunny_ears:']
             await ctx.send(
                 f'{emoji.emojize(random.choice(dance_emojis))} '
                 'Eeny, meeny, miny, moe. Catch a tiger by the toe. If he hollers, let him go. Eeny, meeny, miny, moe. '
