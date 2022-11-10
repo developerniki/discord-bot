@@ -85,8 +85,8 @@ class Fun(commands.Cog, name='Fun'):
                             ':person_cartwheeling:', ':people_with_bunny_ears:']
             await ctx.send(
                 f'{emoji.emojize(random.choice(dance_emojis))} '
-                'Eeny, meeny, miny, moe. Catch a tiger by the toe. If he hollers, let him go. Eeny, meeny, miny, moe. '
-                f'I choose... ```{random.choice(choices).strip()}```'
+                '_Eeny, meeny, miny, moe. Catch a tiger by the toe. If he hollers, let him go. Eeny, meeny, miny, moe._ '
+                f'{ctx.author.mention}, I choose... ```{random.choice(choices).strip()}```'
             )
 
 
