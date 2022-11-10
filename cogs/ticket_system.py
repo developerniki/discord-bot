@@ -771,25 +771,33 @@ class TicketRequestView(ui.View):
         request_channel = request_channel_id and interaction.guild.get_channel(request_channel_id)
 
         if request_channel is None:
+            _logger.info(
+                f'{interaction.user} clicked the ticket request button but the ticket request channel is not '
+                'configured yet.'
+            )
             await interaction.response.send_message(
                 'Could not open a ticket request as a ticket request channel has not been configured.',
                 ephemeral=True
             )
             return False
         elif await self.ts.ticket_store.num_open(interaction.guild_id, interaction.user.id) > 0:
+            _logger.info(f'{interaction.user} clicked the ticket request button but already has an open ticket.')
             await interaction.response.send_message(
                 'Could not open a ticket request as you already have an open ticket. Please try again later.',
                 ephemeral=True
             )
             return False
         elif await self.ts.ticket_request_store.num_pending(interaction.guild_id, interaction.user.id) > 0:
+            _logger.info(
+                f'{interaction.user} clicked the ticket request button but still has a pending ticket request.'
+            )
             await interaction.response.send_message(
                 'Could not open a ticket request as you already have a pending ticket request. Please try again later.',
                 ephemeral=True
             )
             return False
-        elif await self.ts.ticket_cooldown_store.get_remaining_cooldown(interaction.guild_id,
-                                                                        interaction.user.id) > 0:
+        elif await self.ts.ticket_cooldown_store.get_remaining_cooldown(interaction.guild_id, interaction.user.id) > 0:
+            _logger.info(f'{interaction.user} clicked the ticket request button but a cooldown is still in effect.')
             await interaction.response.send_message(
                 'Could not open a ticket request as your ticket was rejected recently. Please try again later.',
                 ephemeral=True
@@ -805,6 +813,7 @@ class TicketRequestView(ui.View):
         custom_id='request_ticket',
     )
     async def request_ticket(self, interaction: Interaction, _button: ui.Button) -> None:
+        _logger.info(f'{interaction.user} requested a ticket.')
         request_ticket_modal = TicketRequestModal(self.ts)
         await interaction.response.send_modal(request_ticket_modal)
 
@@ -860,6 +869,8 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
         request_channel_id = await self.ts.ticket_settings_store.get_request_channel_id(interaction.guild_id)
         request_channel = interaction.guild.get_channel(request_channel_id)
 
+        _logger.info(f'{interaction.user} submitted a ticket request. The reason is: {self.reason_txt_input.value}')
+
         # Open a new ticket request in the database.
         ticket_request = await self.ts.ticket_request_store.create(
             guild_id=interaction.guild_id,
@@ -914,6 +925,9 @@ class TicketNotificationView(ui.View):
         if interaction.user.guild_permissions.manage_channels:
             return True
         else:
+            _logger.warning(
+                f'{interaction.user} tried to accept or reject a ticket request but lack the appropriate permissions.'
+            )
             await interaction.response.send_message('You are not allowed to do this action!')
             return False
 
@@ -936,8 +950,9 @@ class TicketNotificationView(ui.View):
                 category=interaction.channel.category,
                 reason=f'create ticket for user {tools.user_string(interaction.user)}',
             )
+            ticket_member = interaction.guild.get_member(ticket.user_id)
             await channel.set_permissions(
-                interaction.guild.get_member(ticket.user_id),
+                ticket_member,
                 read_messages=True,
                 send_messages=True
             )
@@ -946,7 +961,6 @@ class TicketNotificationView(ui.View):
             await self.ts.ticket_store.set_channel(ticket=ticket, channel_id=channel.id)
 
             # Describe why this channel was opened.
-            ticket_member = interaction.guild.get_member(ticket.user_id)
             description = f'This ticket has been created at the request of {ticket_member.mention}. '
             if ticket.reason:
                 description += f'They wanted to talk about the following:\n{tools.quote_message(ticket.reason)}\n\n'
@@ -957,6 +971,9 @@ class TicketNotificationView(ui.View):
             file = discord.File(self.ts.bot.config.img_dir / 'accepted_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             await channel.send(embed=embed, file=file)
+
+            _logger.info(f'{interaction.user} accepted the ticket request for user {tools.user_string(ticket_member)} '
+                         f'with reason {ticket.reason}.')
 
             # Store the decision to accept the ticket in the database.
             await self.ts.ticket_request_store.accept(ticket_request=self.ticket_request, ticket=ticket)
@@ -998,8 +1015,9 @@ class TicketNotificationView(ui.View):
                 category=category,
                 reason=f'reject ticket for user {interaction.user.id}',
             )
+            ticket_member = interaction.guild.get_member(self.ticket_request.user_id)
             await channel.set_permissions(
-                interaction.guild.get_member(self.ticket_request.user_id),
+                ticket_member,
                 read_messages=True,
                 send_messages=False
             )
@@ -1011,8 +1029,7 @@ class TicketNotificationView(ui.View):
             await self.ts.ticket_request_store.set_channel(ticket_request=self.ticket_request, channel_id=channel.id)
 
             # Describe why this channel was opened.
-            member = interaction.guild.get_member(self.ticket_request.user_id)
-            description = f'The ticket created at the request of {member.mention} has been ' \
+            description = f'The ticket created at the request of {ticket_member.mention} has been ' \
                           '__**rejected**__. Therefore, this channel only serves to inform them of this ' \
                           'decision. It will be auto-deleted in ~24 hours. '
             if self.ticket_request.reason:
@@ -1027,6 +1044,9 @@ class TicketNotificationView(ui.View):
             file = discord.File(self.ts.bot.config.img_dir / 'rejected_ticket.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             await channel.send(embed=embed, file=file)
+
+            _logger.info(f'{interaction.user} rejected the ticket request for user {tools.user_string(ticket_member)} '
+                         f'with reason {self.ticket_request.reason}.')
 
             # Store the decision to reject the ticket request in the database and apply a cooldown to the user.
             await self.ts.ticket_request_store.reject(ticket_request=self.ticket_request)
