@@ -40,7 +40,6 @@ class Config:
             root_dir: Path,
             ext_dir: Path,
             img_dir: Path,
-            migr_dir: Path,
             cfg_file: Path,
             db_file: Path,
             log_file: Path
@@ -51,7 +50,6 @@ class Config:
         self.ext_dir = ext_dir
         self.cfg_file = cfg_file
         self.img_dir = img_dir
-        self.migr_dir = migr_dir
         self.db_file = db_file
         self.log_file = log_file
 
@@ -104,7 +102,6 @@ class Config:
             root_dir=root_dir,
             ext_dir=ext_dir,
             img_dir=img_dir,
-            migr_dir=migr_dir,
             cfg_file=cfg_file,
             db_file=db_file,
             log_file=log_file,

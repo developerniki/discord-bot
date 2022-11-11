@@ -1,12 +1,11 @@
 import logging
-from pathlib import Path
 
-import aiosqlite
 import discord
 from discord.ext import commands
 
+from database import database
 from .config import Config
-from .store import CoreStore
+from database.database import CoreStore
 
 _logger = logging.getLogger(__name__)
 
@@ -37,19 +36,6 @@ class SlimBot(commands.Bot):
 
         super().__init__(command_prefix=command_prefix, intents=intents, case_insensitive=True)
 
-    async def do_migrations(self) -> None:
-        """Do the database migrations by creating all the tables and moving the default settings to the DefaultSettings
-        table."""
-        sql_scripts = [path.read_text() for path in self.config.migr_dir.iterdir()]
-
-        Path(self.config.db_file).parent.mkdir(parents=True, exist_ok=True)
-        async with aiosqlite.connect(self.config.db_file) as con:
-            for script in sql_scripts:
-                await con.executescript(script)
-            await con.execute('DELETE FROM DefaultSettings')
-            await con.executemany('INSERT INTO DefaultSettings (k, v) VALUES (?, ?)', self.config.defaults.items())
-            await con.commit()
-
     def available_extensions(self):
         return [
             f'{self.config.ext_dir.name}.{entry.stem}'
@@ -58,7 +44,7 @@ class SlimBot(commands.Bot):
         ]
 
     async def setup_hook(self) -> None:
-        await self.do_migrations()
+        await database.do_migrations(defaults=self.config.defaults)
         _logger.info('Did the database migrations.')
 
         for ext in self.available_extensions():

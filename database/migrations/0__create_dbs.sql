@@ -54,3 +54,10 @@ CREATE TABLE IF NOT EXISTS VerificationRequests(
     joined_at BIGINT NOT NULL,
     closed_at BIGINT
 );
+
+CREATE TABLE IF NOT EXISTS VerificationButtonForUser(
+    user_id BIGINT NOT NULL,
+    guild_id BIGINT NOT NULL,
+    creation_time BIGINT NOT NULL,
+    PRIMARY KEY (guild_id, user_id)
+);
