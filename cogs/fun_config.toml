@@ -11,30 +11,30 @@ hug_links = [
     "https://tenor.com/view/heejake-gif-24738397"
 ]
 
-# All matches are case-insensitive and are anchored at the beginning but not the end of the string. `<mention>`
+# All matches are case-insensitive and are anchored at the beginning but not the end of the string. `<user>`
 # (without the quotes) denotes a user mention. Textual representations of emojis as used in the `emojis` PyPi package
 # (e.g., :red_heart:) as well as emojis themselves are allowed. Because some emojis look identical but have different
 # binary representations, it is recommended that only textual representations be used in the patterns.
-[patterns."<mention>?(, )?(good morning)(?!\\S)"]
+[patterns."<user>?(, )?(good morning)(?!\\S)"]
 reactions = [":sun:"]
 responses = ["Good morning to you, too!"]
 
-[patterns."<mention>?(, )?(g(ood ?)?ni(ght|te)|sleep well|gn|night)(?!\\S)"]
+[patterns."<user>?(, )?(g(ood ?)?ni(ght|te)|sleep well|gn|night)(?!\\S)"]
 reactions = [":sleeping_face:", ":crescent_moon:", ':ZZZ:', ':yawning_face:']
 responses = ["Sweet dreams! ~", "Good nighty! :relieved_face:"]
 
-[patterns."<mention>?(, )?(hello|hi|sup|what'?s up\\?|have a great day)(?!\\S)"]
+[patterns."<user>?(, )?(hello|hi|sup|what'?s up\\?|have a great day)(?!\\S)"]
 reactions = [":waving_hand:", ":smiling_face_with_smiling_eyes:"]
 responses = []
 
-[patterns."<mention>?(, )?(bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?)(?!\\S)"]
+[patterns."<user>?(, )?(bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?)(?!\\S)"]
 reactions = [":waving_hand:"]
 responses = ["Take care!", "See you around!", "Hope to see you back, soon!"]
 
-[patterns."<mention>?(, )?((I )?(love|:red_heart:) (you|u|ya)|hug)(?!\\S)"]
+[patterns."<user>?(, )?((I )?(love|:red_heart:) (you|u|ya)|hug)(?!\\S)"]
 reactions = [":red_heart:", ":heart_on_fire:", ":revolving_hearts:"]
 responses = ["Aww!", "You're sweet!", "Cute ~"]
 
-[patterns."<mention>?(, )?((I|we )?(thank (you|u|ya))|thankies|thanks)(?!\\S)"]
+[patterns."<user>?(, )?((I|we )?(thank (you|u|ya))|thankies|thanks)(?!\\S)"]
 reactions = [":OK_hand:", ":face_with_steam_from_nose:"]
 responses = []

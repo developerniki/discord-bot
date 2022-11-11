@@ -97,7 +97,7 @@ class PatternToAction:
         """
         pattern = pattern.replace('\\\\', '\\')  # For some reason, the toml library doesn't do this itself.
         pattern = demojize(pattern)  # Some emojis have multiple unicode representations, so convert to text.
-        pattern = pattern.replace('<mention>', r'!?(<@\d+>,? ?)')
+        pattern = pattern.replace('<user>', r'!?(<@\d+>,? ?)')
         self.pattern = re.compile(pattern)
         self.reactions = [emojize(reaction) for reaction in reactions]
         self.responses = [emojize(response) for response in responses]

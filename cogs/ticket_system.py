@@ -104,7 +104,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         if ticket.reason:
             description += f'They have given the following reason:\n{tools.quote_message(ticket.reason)}\n\n'
         description += 'To close this ticket use `/ticket close`. ' \
-                       'To add another user to the ticket use `/ticket add_user <@user>`.'
+                       'To add another user to the ticket use `/ticket add <@user>`.'
         embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=discord.Color.yellow(),
                       timestamp=datetime.now(timezone.utc))
         file = discord.File(self.bot.config.img_dir / 'accepted_ticket.png', filename='image.png')
@@ -965,7 +965,7 @@ class TicketNotificationView(ui.View):
             if ticket.reason:
                 description += f'They wanted to talk about the following:\n{tools.quote_message(ticket.reason)}\n\n'
             description += 'To close this ticket use `/ticket close`. ' \
-                           'To add another user to the ticket use `/ticket adduser <@user>`.'
+                           'To add another user to the ticket use `/ticket add @<user>`.'
             embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=discord.Color.yellow(),
                           timestamp=datetime.now(timezone.utc))
             file = discord.File(self.ts.bot.config.img_dir / 'accepted_ticket.png', filename='image.png')
