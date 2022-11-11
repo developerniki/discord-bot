@@ -17,7 +17,7 @@ class Moderation(commands.Cog, name='Moderation'):
 
     @commands.hybrid_command(aliases=['echo'])
     @commands.has_permissions(send_messages=True, manage_messages=True)
-    async def say(self, ctx: commands.Context, message: str, channel: Optional[TextChannel] = None) -> None:
+    async def say(self, ctx: commands.Context, channel: Optional[TextChannel], *, message: str) -> None:
         """Make the bot say `message` in `channel`."""
         if channel is None:
             channel = ctx.channel
