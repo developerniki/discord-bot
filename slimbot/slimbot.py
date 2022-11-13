@@ -3,9 +3,8 @@ import logging
 import discord
 from discord.ext import commands
 
-from database import database
+from database import database, CoreStore
 from .config import Config
-from database.database import CoreStore
 
 _logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ class SlimBot(commands.Bot):
         ]
 
     async def setup_hook(self) -> None:
-        await database.do_migrations(defaults=self.config.defaults)
+        await database.do_migrations(db_file=self.config.db_file, defaults=self.config.defaults)
         _logger.info('Did the database migrations.')
 
         for ext in self.available_extensions():

@@ -1,6 +1,5 @@
-import inspect
 from pathlib import Path
-from typing import Any, Dict, List, Type
+from typing import Any, Dict
 
 import aiosqlite
 
@@ -8,12 +7,12 @@ MIGRATIONS_DIR = Path(__file__).parent / 'migrations'
 MIGRATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-async def do_migrations(defaults: Dict[str, Any]) -> None:
+async def do_migrations(db_file: Path, defaults: Dict[str, Any]) -> None:
     """Do the database migrations by creating all the tables and moving the default settings to the DefaultSettings
     table."""
     sql_scripts = [path.read_text() for path in MIGRATIONS_DIR.iterdir()]
 
-    async with aiosqlite.connect(MIGRATIONS_DIR) as con:
+    async with aiosqlite.connect(db_file) as con:
         for script in sql_scripts:
             await con.executescript(script)
         await con.execute('DELETE FROM DefaultSettings')
@@ -26,54 +25,8 @@ class BaseStore:
     WARNING: Does not sanitize the input.
     """
 
-    def __init__(self, db_file: Path, table_name: str):
+    def __init__(self, db_file: Path):
         self.db_file = db_file
-        self.table_name = table_name
-
-    async def select_one(self, *args: str, mapto: Any = None, **kwargs: Any) -> Any:
-        """Select one row of `*args` and filter by `**kwargs`. If `*args` is a single column, unpack it from its tuple.
-        WARNING: Does not sanitize the input. # TODO Documentation of `mapto`
-        """
-        async with aiosqlite.connect(self.db_file) as con:
-            assert len(args) >= 1
-            assert len(kwargs) >= 1
-            projection = ", ".join(args)
-            filter_by = ', '.join((f'{key}=?' for key in kwargs))
-            values = kwargs.values()
-            statement = f'SELECT {projection} FROM {self.table_name} WHERE {filter_by}'
-            cur = await con.execute(statement, values)
-            res = await cur.fetchone()
-
-            if mapto is not None:
-                if inspect.isclass(mapto):
-                    res = mapto(**dict(zip(args, res)))
-                elif isinstance(mapto, object):
-                    for attr, val in zip(args, res):
-                        setattr(mapto, attr, val)
-                    res = mapto
-                elif len(args) == 1:
-                    res = res[0]
-
-            return res
-
-    async def select_all(self, *args: str, mapto: Type = None, **kwargs: Any) -> List[Any]:
-        """Select all rows of `*args` and filter by `**kwargs`. If `*args` is a single column, unpack it from its tuple.
-        WARNING: Does not sanitize the input. # TODO Documentation of `mapto`
-        """
-        async with aiosqlite.connect(self.db_file) as con:
-            assert len(args) >= 1
-            assert len(kwargs) >= 1
-            projection = ", ".join(args)
-            filter_by = ', '.join((f'{key}=?' for key in kwargs))
-            values = kwargs.values()
-            statement = f'SELECT {projection} FROM {self.table_name} WHERE {filter_by}'
-            cur = await con.execute(statement, values)
-            res = await cur.fetchall()
-
-            if inspect.isclass(mapto):
-                res = [mapto(**dict(zip(args, res_))) for res_ in res]
-
-            return res
 
     async def get_default_setting(self, key: Any) -> Any:
         """Return the default setting for `key`."""
