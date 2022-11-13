@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS TicketRequests(
     channel_id BIGINT,
     created_at BIGINT,
     closed_at BIGINT,
-    FOREIGN KEY (ticket_id) REFERENCES ticket(id) ON UPDATE CASCADE ON DELETE CASCADE
+    FOREIGN KEY (ticket_id) REFERENCES Tickets(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS UserTicketCooldowns(
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS UserTicketCooldowns(
     user_id BIGINT NOT NULL,
     ticket_id INTEGER, -- `null` if created manually
     cooldown_ends_at INTEGER NOT NULL,
-    FOREIGN KEY (ticket_id) REFERENCES ticket(id) ON UPDATE CASCADE ON DELETE CASCADE
+    FOREIGN KEY (ticket_id) REFERENCES Tickets(id) ON UPDATE CASCADE ON DELETE CASCADE
     PRIMARY KEY (guild_id, user_id)
 );
 
@@ -53,11 +53,4 @@ CREATE TABLE IF NOT EXISTS VerificationRequests(
     verified BOOLEAN NOT NULL CHECK (verified IN (FALSE, TRUE)),
     joined_at BIGINT NOT NULL,
     closed_at BIGINT
-);
-
-CREATE TABLE IF NOT EXISTS VerificationButtonForUser(
-    user_id BIGINT NOT NULL,
-    guild_id BIGINT NOT NULL,
-    creation_time BIGINT NOT NULL,
-    PRIMARY KEY (guild_id, user_id)
 );
