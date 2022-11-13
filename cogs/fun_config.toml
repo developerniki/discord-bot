@@ -27,7 +27,7 @@ responses = ["Sweet dreams! ~", "Good nighty! :relieved_face:"]
 reactions = [":waving_hand:", ":smiling_face_with_smiling_eyes:"]
 responses = []
 
-[patterns."<user>?(, )?(bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?)(?!\\S)"]
+[patterns."<user>?(, )?(bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?|talk to you (\\w* )?later)(?!\\S)"]
 reactions = [":waving_hand:"]
 responses = ["Take care!", "See you around!", "Hope to see you back, soon!"]
 
