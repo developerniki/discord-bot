@@ -21,7 +21,6 @@ database = 'database/data.db'
 log = 'logs/slimbot.log'
 cogs = 'cogs'
 images = 'images'
-migrations = 'migrations'
 """
 
 
@@ -89,7 +88,6 @@ class Config:
             defaults: Dict = config['defaults']
             ext_dir = root_dir / config['paths']['cogs']
             img_dir = root_dir / config['paths']['images']
-            migr_dir = root_dir / config['paths']['migrations']
             db_file = root_dir / config['paths']['database']
             log_file = root_dir / config['paths']['log']
 
