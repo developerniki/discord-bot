@@ -1,19 +1,17 @@
 import asyncio
 import logging
 import re
-import time
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 import aiosqlite
 import discord
 from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User
-from discord.ext import commands
+from discord.ext import commands, tasks
 from emoji import emojize
 
+from database import VerificationRequest, VerificationSettingStore, VerificationRequestStore
 from slimbot import SlimBot, tools
-from slimbot.store import BaseStore
 
 _logger = logging.getLogger(__name__)
 
