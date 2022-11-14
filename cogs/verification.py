@@ -99,6 +99,12 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         else:
             await self.__create_verification_button(member)
 
+    @commands.Cog.listener()
+    async def on_member_leave(self, member: Member) -> None:
+        pass
+        # TODO Remove verification request buttons and join message if verification is incomplete.
+        # join_message = self.verification_request_store
+
     @commands.hybrid_group()
     @commands.has_guild_permissions(manage_roles=True, manage_channels=True)
     async def verification(self, ctx):
