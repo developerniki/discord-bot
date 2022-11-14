@@ -58,17 +58,21 @@ class CommandHook(commands.Cog, name='Command Hook'):
             _logger.info(msg)
             await ctx.send(msg, ephemeral=True)
         elif isinstance(exception, commands.MissingPermissions):
-            msg = f'insufficient permissions to use {ctx.command}'
+            msg = f'insufficient permissions to use {ctx.command}.'
             _logger.warning('The user has ' + msg)
             await ctx.send('You have ' + msg, ephemeral=True)
         elif isinstance(exception, commands.MissingRequiredArgument):
-            msg = f'The command is missing the required argument {exception.param.name}.'
+            msg = f'The command is missing the required argument `{exception.param.name}`.'
             _logger.warning(msg)
             await ctx.send(msg, ephemeral=True)
         elif isinstance(exception, commands.MissingFlagArgument):
-            msg = f'The command is missing the flag {repr(exception.flag.name)}.'
+            msg = f'The command is missing the flag `{repr(exception.flag.name)}`.'
             _logger.warning(msg)
             await ctx.send(msg, ephemeral=True)
+        elif isinstance(exception, commands.CommandOnCooldown):
+            msg = f'Retry in {round(exception.retry_after)}s.'
+            _logger.warning(f'User reused a command before the cooldown was over. ' + msg)
+            await ctx.send('Too fast! ' + msg, ephemeral=True)
         else:
             _logger.error(f'Ignoring exception `{str(exception)}` in command {ctx.command}.', exc_info=exception)
             await ctx.send('There was an unexpected error!', ephemeral=True)
