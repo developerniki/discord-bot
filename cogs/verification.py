@@ -280,23 +280,17 @@ class ChooseBasicInfoView(ui.View):
     def __init__(self, verification_system: VerificationSystem) -> None:
         super().__init__(timeout=None)
         self.vs = verification_system
+        # Thirteen is the minimum age Discord allows.
+        self.age_ranges = ('13', '14', '15', '16', '17', '18', '19', '20-24', '25-29', '30-39', '40-49', '50-59', '60+')
         self.age_range_select = ui.Select(
             placeholder="What's your age-range?",
-            options=[
-                SelectOption(label='13-15'),  # Thirteen is the minimum age Discord allows.
-                SelectOption(label='16-17'),
-                SelectOption(label='18-22'),
-                SelectOption(label='23-29'),
-                SelectOption(label='30-39'),
-                SelectOption(label='40-49'),
-                SelectOption(label='50-59'),
-                SelectOption(label='60+'),
-            ],
+            options=[SelectOption(label=label) for label in self.age_ranges],
             custom_id='select_age_range'
         )
         self.age_range_select.callback = self.age_range_selected
         self.add_item(self.age_range_select)
 
+        self.genders = ('male', 'female', 'non-binary')
         self.gender_select = ui.Select(
             placeholder="What's your gender?",
             options=[
@@ -352,6 +346,8 @@ class ChooseBasicInfoView(ui.View):
         if not gender or not age_range:
             await interaction.response.send_message(content='Please fill out both fields!', ephemeral=True)
 
+        assert age_range in self.age_ranges
+        assert gender in self.genders
         choose_advanced_info_modal = ChooseAdvancedInfoModal(verification_system=self.vs, age_range=age_range,
                                                              gender=gender, welcome_message=join_message)
         await interaction.response.send_modal(choose_advanced_info_modal)
@@ -367,8 +363,6 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
 
         self.vs = verification_system
         self.age_range = age_range
-        assert age_range in ('12-15', '16-17', '18-29', '30-39', '40+')
-        assert gender in ('male', 'female', 'non-binary')
         self.gender = gender
         self.welcome_message = welcome_message
 
