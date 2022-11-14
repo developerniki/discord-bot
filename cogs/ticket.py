@@ -647,7 +647,7 @@ class TicketNotificationView(ui.View):
                 description += 'Originally, the user wanted to talk about the following:\n' \
                                f'{tools.quote_message(self.ticket_request.reason)}\n\n'
             description += 'To close this channel use `/ticket close`. ' \
-                           'To add another user to the channel use `/ticket adduser <@user>`.'
+                           'To add another user to the channel use `/ticket add <@user>`.'
             embed = Embed(title=f'Ticket Request #{self.ticket_request.id} [REJECTED]',
                           description=description,
                           color=discord.Color.red(),
