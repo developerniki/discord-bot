@@ -495,9 +495,10 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         )
         self.join_reason_text_input = ui.TextInput(
             label='Join Reason',
-            placeholder='Why are you here?',
+            placeholder='Why are you here? Please give a detailed description.',
             style=discord.TextStyle.paragraph,
             required=True,
+            min_length=50,
             max_length=500
         )
 
