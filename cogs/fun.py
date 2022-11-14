@@ -69,6 +69,7 @@ class Fun(commands.Cog, name='Fun'):
         await ctx.channel.send(random.choice(self.hug_links))
 
     @commands.hybrid_command()
+    @commands.cooldown(1, 10, commands.BucketType.user)
     async def cat(self, ctx: commands.Context):
         """Reply with a cat picture."""
         cat_picture_url = await fetch_cat_picture_url()
