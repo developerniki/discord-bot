@@ -601,44 +601,53 @@ class VerificationNotificationView(ui.View):
 
             # Retrieve the member this verification request belongs to.
             member = interaction.guild.get_member(self.verification_request.user_id)
-            _logger.info(f"{tools.user_string(interaction.user)} accepted {tools.user_string(member)}'s "
-                         "verification request.")
+            if member is None:
+                user = self.vs.bot.get_user(self.verification_request.user_id)
+                user_mention = user.mention if user is not None else '<deleted user>'
+                msg = f"{interaction.user.mention} tried to accept {user_mention}'s verification request but it " \
+                      "appears they already left."
+                _logger.info(msg)
+                await interaction.response.send_message(msg)
+            else:
+                _logger.info(f"{tools.user_string(interaction.user)} accepted {tools.user_string(member)}'s "
+                             "verification request.")
 
-            # Assign the verification role to the user.
-            # TODO Assign the other roles (gender and age-range).
-            role_id = await self.vs.verification_settings_store.get_verification_role_id(interaction.guild_id)
-            role = interaction.guild.get_role(role_id)
-            try:
-                await member.add_roles(role, reason='verify the user')
-            except discord.errors.Forbidden:
-                _logger.exception('The bot role is probably below the verification role.')
-                interaction.response.send_message(
-                    'Error: Lacking permissions. The bot role is probably below the verification role.', ephemeral=True
+                # Assign the verification role to the user.
+                # TODO Assign the other roles (gender and age-range).
+                role_id = await self.vs.verification_settings_store.get_verification_role_id(interaction.guild_id)
+                role = interaction.guild.get_role(role_id)
+                try:
+                    await member.add_roles(role, reason='verify the user')
+                except discord.errors.Forbidden:
+                    _logger.exception('The bot role is probably below the verification role.')
+                    interaction.response.send_message(
+                        'Error: Lacking permissions. The bot role is probably below the verification role.',
+                        ephemeral=True
+                    )
+                    return
+
+                # Store the decision to verify the user in the database.
+                await self.vs.verification_request_store.close(self.verification_request, True)
+
+                # Welcome the user with additional information.
+                welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
+                    interaction.guild_id
                 )
-                return
-
-            # Store the decision to verify the user in the database.
-            await self.vs.verification_request_store.close(self.verification_request, True)
-
-            # Welcome the user with additional information.
-            welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
-                interaction.guild_id
-            )
-            welcome_channel = interaction.guild.get_channel(welcome_channel_id)
-            welcome_message = await self.vs.verification_settings_store.get_welcome_message(
-                interaction.guild_id
-            )
-            description = welcome_message.replace('<user>', member.mention)
-            # embed = Embed(title=f'Welcome to {interaction.guild.name}!',
-            #               description=description,
-            #               color=discord.Color.green(),
-            #               timestamp=datetime.now(timezone.utc))
-            # embed.set_author(name=tools.user_string(interaction.user),
-            #                  url=f'https://discordapp.com/users/{interaction.user.id}',
-            #                  icon_url=interaction.user.display_avatar)
-            # file = discord.File(self.vs.bot.img_dir / 'welcome2.png', filename='image.png')
-            # embed.set_thumbnail(url='attachment://image.png')
-            await welcome_channel.send(content=description)
+                welcome_channel = interaction.guild.get_channel(welcome_channel_id)
+                welcome_message = await self.vs.verification_settings_store.get_welcome_message(
+                    interaction.guild_id
+                )
+                description = welcome_message.replace('<user>', member.mention)
+                # embed = Embed(title=f'Welcome to {interaction.guild.name}!',
+                #               description=description,
+                #               color=discord.Color.green(),
+                #               timestamp=datetime.now(timezone.utc))
+                # embed.set_author(name=tools.user_string(interaction.user),
+                #                  url=f'https://discordapp.com/users/{interaction.user.id}',
+                #                  icon_url=interaction.user.display_avatar)
+                # file = discord.File(self.vs.bot.img_dir / 'welcome2.png', filename='image.png')
+                # embed.set_thumbnail(url='attachment://image.png')
+                await welcome_channel.send(content=description)
 
             # Remove the welcome message from the join channel. At this point, if it does not exist, we do not care.
             join_channel_id = self.verification_request.join_channel_id
@@ -674,16 +683,24 @@ class VerificationNotificationView(ui.View):
 
             # Retrieve the member this verification request belongs to.
             member = interaction.guild.get_member(self.verification_request.user_id)
-            _logger.info(f"{tools.user_string(interaction.user)} clicked the `Reject` button for "
-                         f"{tools.user_string(member)}'s verification request.")
+            if member is None:
+                user = self.vs.bot.get_user(self.verification_request.user_id)
+                user_mention = user.mention if user is not None else '<deleted user>'
+                msg = f"{interaction.user.mention} clicked the `Reject` button for {user_mention}'s verification " \
+                      "request but it appears they already left."
+                _logger.info(msg)
+                await interaction.response.send_message(msg)
+            else:
+                _logger.info(f"{tools.user_string(interaction.user)} clicked the `Reject` button for "
+                             f"{tools.user_string(member)}'s verification request.")
 
-            self.message = interaction.message
+                self.message = interaction.message
 
-            # Ask for confirmation and a reason to kick the user.
-            confirm_kick_modal = ConfirmKickModal(verification_system=self.vs,
-                                                  verification_request=self.verification_request,
-                                                  verification_notification_view=self)
-            await interaction.response.send_modal(confirm_kick_modal)
+                # Ask for confirmation and a reason to kick the user.
+                confirm_kick_modal = ConfirmKickModal(verification_system=self.vs,
+                                                      verification_request=self.verification_request,
+                                                      verification_notification_view=self)
+                await interaction.response.send_modal(confirm_kick_modal)
 
 
 class ConfirmKickModal(ui.Modal, title='Kick the user?'):
@@ -709,20 +726,29 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
         user_id = self.verification_request.user_id
         member = interaction.guild.get_member(user_id)
         kick_reason = self.kick_reason_text_input.value
-        _logger.info(f"{tools.user_string(interaction.user)} rejected {tools.user_string(member)}'s verification "
-                     f"request for {kick_reason=}.")
-        await member.kick(reason=kick_reason)
+        if member is None:
+            user = self.vs.bot.get_user(self.verification_request.user_id)
+            user_mention = user.mention if user is not None else '<deleted user>'
+            msg = f"{interaction.user.mention} tried to reject {user_mention}'s verification request and kick them " \
+                  f"with {kick_reason=} but it appears they already left."
+            _logger.info(msg)
+            await interaction.response.send_message(msg)
+        else:
+            _logger.info(f"{tools.user_string(interaction.user)} rejected {tools.user_string(member)}'s verification "
+                         f"request for {kick_reason=}.")
+            await member.kick(reason=kick_reason)
 
-        # Store the decision to not verify the user in the database.
-        await self.vs.verification_request_store.close(self.verification_request, False)
+            # Store the decision to not verify the user in the database.
+            await self.vs.verification_request_store.close(self.verification_request, False)
 
-        # Remove the join message from the join channel. At this point, if it does not exist, we do not care.
-        join_channel_id = await self.vs.verification_settings_store.get_join_channel_id(guild_id=interaction.guild_id)
-        join_channel = self.vs.bot.get_channel(join_channel_id)
-        if join_channel is not None:
-            join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
-            if join_message is not None:
-                await join_message.delete()
+            # Remove the join message from the join channel. At this point, if it does not exist, we do not care.
+            join_channel_id = await self.vs.verification_settings_store.get_join_channel_id(
+                guild_id=interaction.guild_id)
+            join_channel = self.vs.bot.get_channel(join_channel_id)
+            if join_channel is not None:
+                join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
+                if join_message is not None:
+                    await join_message.delete()
 
         # Modify verification notification message.
         # The lock and `is_finished()` call ensure that the view is only responded to once.
