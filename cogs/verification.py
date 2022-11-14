@@ -162,7 +162,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The join channel has been set to {channel.mention}.', ephemeral=True)
 
     @verification.command()
-    async def joinmessage(self, ctx: commands.Context, message: Optional[str]) -> None:
+    async def joinmessage(self, ctx: commands.Context, *, message: Optional[str]) -> None:
         """Get or set the join message, depending on whether `message` is present."""
         if message is None:
             message = await self.verification_settings_store.get_join_message(ctx.guild.id)  # TODO
@@ -190,7 +190,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The welcome channel has been set to {channel.mention}.', ephemeral=True)
 
     @verification.command()
-    async def welcomemessage(self, ctx: commands.Context, message: Optional[str]) -> None:
+    async def welcomemessage(self, ctx: commands.Context, *, message: Optional[str]) -> None:
         """Get or set the welcome message, depending on whether `message` is present."""
         if message is None:
             message = await self.verification_settings_store.get_welcome_message(ctx.guild.id)
