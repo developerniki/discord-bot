@@ -401,11 +401,14 @@ class ChooseBasicInfoView(ui.View):
         self.age_range_select = ui.Select(
             placeholder="What's your age-range?",
             options=[
-                SelectOption(label='12-15'),
+                SelectOption(label='13-15'),  # Thirteen is the minimum age Discord allows.
                 SelectOption(label='16-17'),
-                SelectOption(label='18-29'),
+                SelectOption(label='18-22'),
+                SelectOption(label='23-29'),
                 SelectOption(label='30-39'),
-                SelectOption(label='40+'),
+                SelectOption(label='40-49'),
+                SelectOption(label='50-59'),
+                SelectOption(label='60+'),
             ],
             custom_id='select_age_range'
         )
