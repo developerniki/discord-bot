@@ -3,11 +3,10 @@ import io
 import json
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
 import discord
 import humanize
-from discord import HTTPException, Forbidden, NotFound
 from discord import ui, ButtonStyle, Interaction, Embed, TextChannel, User, CategoryChannel, Message
 from discord.ext import commands, tasks
 from emoji import emojize

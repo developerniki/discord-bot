@@ -4,10 +4,9 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
-import aiosqlite
 import discord
 from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User
-from discord.ext import commands, tasks
+from discord.ext import commands
 from emoji import emojize
 
 from database import VerificationRequest, VerificationSettingStore, VerificationRequestStore
