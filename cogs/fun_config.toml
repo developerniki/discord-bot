@@ -36,5 +36,5 @@ reactions = [":red_heart:", ":heart_on_fire:", ":revolving_hearts:"]
 responses = ["Aww!", "You're sweet!", "Cute ~"]
 
 [patterns."<user>?(, )?((I|we )?(thank (you|u|ya))|thankies|thanks)(?!\\S)"]
-reactions = [":OK_hand:", ":face_with_steam_from_nose:"]
+reactions = [":OK_hand:", ":smiling_face_with_smiling_eyes:"]
 responses = []
