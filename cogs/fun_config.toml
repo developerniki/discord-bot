@@ -29,7 +29,7 @@ responses = [
     "Carpe diem!"
 ]
 
-[patterns."g(ood ?)?ni(ght|te)|sleep well|gn|night"]
+[patterns."g(n|((ood ?)?ni(ght|te)))|sleep well"]
 reactions = [":sleeping_face:", ":crescent_moon:", ':ZZZ:', ':yawning_face:']
 responses = [
     "Sweet dreams! ~",
@@ -41,20 +41,20 @@ responses = [
     "I'm also getting tired. :yawning_face:"
 ]
 
-[patterns."hello|hi|sup|what'?s up\\?|have a great day"]
+[patterns."h?ello|hi|sup|what'?s up\\?|have a (g(reat|ood)|nice) day"]
 reactions = [":waving_hand:", ":smiling_face_with_smiling_eyes:"]
 responses = []
 chance = 0.4
 
-[patterns."bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?|talk to you (\\w* )?later"]
+[patterns."bye|fare well|(see |c ?)(y(ou|a)|u)!?|talk to (y(ou|a)|u) l(at|8)er"]
 reactions = [":waving_hand:"]
 responses = ["Take care!", "See you around!", "Hope to see you back, soon!"]
 
-[patterns."(love|:red_heart:) (you|u|ya)|hug"]
+[patterns."(love|:red_heart:) (y(ou|a)|u)|hug"]
 reactions = [":red_heart:", ":heart_on_fire:", ":revolving_hearts:"]
 responses = ["Aww!", "You're sweet!", "Cute ~"]
 
-[patterns."(thank (you|u|ya))|thankies|thanks"]
+[patterns."(t(y|(hank( (y(ou|a)|u)|(ie)?s))))"]
 reactions = [":OK_hand:", ":smiling_face_with_smiling_eyes:"]
 responses = []
 chance = 0.4
