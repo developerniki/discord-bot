@@ -32,8 +32,9 @@ class Fun(commands.Cog, name='Fun'):
                 self.hug_links = config['hug_links']
                 self.pattern_to_action = [
                     PatternToAction(
-                        pattern, actions['reactions'],
-                        actions['responses'],
+                        pattern,
+                        actions.get('reactions', []),
+                        actions.get('responses', []),
                         actions.get('chance', 1.0)
                     )
                     for pattern, actions in config['patterns'].items()
