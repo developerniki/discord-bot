@@ -30,8 +30,14 @@ class Fun(commands.Cog, name='Fun'):
             with open(config_file) as file:
                 config = toml.load(file)
                 self.hug_links = config['hug_links']
-                self.pattern_to_action = [PatternToAction(pattern, actions['reactions'], actions['responses'])
-                                          for pattern, actions in config['patterns'].items()]
+                self.pattern_to_action = [
+                    PatternToAction(
+                        pattern, actions['reactions'],
+                        actions['responses'],
+                        actions.get('chance', 1.0)
+                    )
+                    for pattern, actions in config['patterns'].items()
+                ]
         except (FileNotFoundError, json.JSONDecodeError, KeyError, re.error):
             _logger.exception(f'Something went wrong opening {config_file}.')
 
@@ -47,8 +53,8 @@ class Fun(commands.Cog, name='Fun'):
             return
 
         for pattern_action in self.pattern_to_action:
-            if pattern_action.match_lower(message.content):
-                _logger.info(f'Found pattern in message "{message.content}" by user '
+            if pattern_action.match_lower_with_chance(message.content):
+                _logger.info(f'Responding to pattern in message "{message.content}" by user '
                              f'{tools.user_string(message.author)}.')
                 reaction = pattern_action.random_reaction()
                 response = pattern_action.random_response()
@@ -92,22 +98,32 @@ class Fun(commands.Cog, name='Fun'):
 
 
 class PatternToAction:
-    def __init__(self, pattern: str, reactions: List[str], responses: List[str]) -> None:
+    def __init__(self, pattern: str, reactions: List[str], responses: List[str], chance: float) -> None:
         """Represents a pattern and the possible emoji reactions and text responses that can be taken by the bot.
-        If the pattern is invalid, raises `re.error`.
+        `0 <= chance <= 1` is the probability the `match_lower_with_chance` method will return `True` if the match is
+        valid. If the pattern is invalid, raises `re.error`.
         """
+        assert 0 <= chance <= 1
         pattern = pattern.replace('\\\\', '\\')  # For some reason, the toml library doesn't do this itself.
         pattern = demojize(pattern)  # Some emojis have multiple unicode representations, so convert to text.
-        pattern = pattern.replace('<user>', r'!?(<@\d+>,? ?)')
+        pattern = pattern.replace('<user>', r'!?(<@\d+>,? ?)')  # Allows to match a tagged user.
+        # Don't begin or end the pattern with a non-whitespce, but allow ending it with `,`, `.`, and `!`.
+        pattern = r'(?<!\S)' + f'({pattern})' + r'[,.!]?(?!\S)'
         self.pattern = re.compile(pattern)
         self.reactions = [emojize(reaction) for reaction in reactions]
         self.responses = [emojize(response) for response in responses]
+        self.chance = chance
 
     def match_lower(self, string: str) -> bool:
         """Returns whether `string` matches the pattern. The check is case-insensitive.
         """
         string = demojize(string)  # Some emojis have multiple unicode representations, so convert to text.
-        return bool(self.pattern.match(string.lower()))
+        return bool(self.pattern.search(string.lower()))
+
+    def match_lower_with_chance(self, string: str) -> bool:
+        """Like `match_lower` but a valid match only returns `True` in `self.chance` cases.
+        """
+        return random.random() < self.chance and self.match_lower(string)
 
     def random_reaction(self) -> Optional[str]:
         """Returns a random reaction from the list of possible reactions.

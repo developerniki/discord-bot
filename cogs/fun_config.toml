@@ -11,30 +11,50 @@ hug_links = [
     "https://tenor.com/view/heejake-gif-24738397"
 ]
 
-# All matches are case-insensitive and are anchored at the beginning but not the end of the string. `<user>`
-# (without the quotes) denotes a user mention. Textual representations of emojis as used in the `emojis` PyPi package
-# (e.g., :red_heart:) as well as emojis themselves are allowed. Because some emojis look identical but have different
-# binary representations, it is recommended that only textual representations be used in the patterns.
-[patterns."<user>?(, )?(good morning)(?!\\S)"]
+# All matches are case-insensitive, not anchored, and automatically don't match if there is a non-whitespace at the
+# beginning or end of the pattern, except for the characters `,`, `.`, and `!` if they are at the end of the pattern.
+# `<user>` (without the quotes) denotes a user mention. Textual representations of emojis as used in the `emojis` PyPi
+# package (e.g., :red_heart:) as well as emojis themselves are allowed. Because some emojis look identical but have
+# different binary representations, it is recommended that only textual representations be used in the patterns.
+# `chance` is a number between 0.0 and 1.0. and represents the chance the bot will respond to a match. If left out, it
+# defaults to 1.0.
+
+[patterns."g(ood )morn(ing)"]
 reactions = [":sun:"]
-responses = ["Good morning to you, too!"]
+responses = [
+    "Good morning to you, too!",
+    "Seize the day.",
+    "You've got this!",
+    "I believe in you. The day lies in your hands.",
+    "Carpe diem!"
+]
 
-[patterns."<user>?(, )?(g(ood ?)?ni(ght|te)|sleep well|gn|night)(?!\\S)"]
+[patterns."g(ood ?)?ni(ght|te)|sleep well|gn|night"]
 reactions = [":sleeping_face:", ":crescent_moon:", ':ZZZ:', ':yawning_face:']
-responses = ["Sweet dreams! ~", "Good nighty! :relieved_face:"]
+responses = [
+    "Sweet dreams! ~",
+    "Good nighty! :relieved_face:",
+    "You get one wish. :shooting_star:",
+    "Don't stay any longer, you need the energy for tomorrow.",
+    "Make sure you've prepared everything you need for tomorrow.",
+    "Before you go to sleep, take a moment and reflect on the things that went well today, and those that didn't.",
+    "I'm also getting tired. :yawning_face:"
+]
 
-[patterns."<user>?(, )?(hello|hi|sup|what'?s up\\?|have a great day)(?!\\S)"]
+[patterns."hello|hi|sup|what'?s up\\?|have a great day"]
 reactions = [":waving_hand:", ":smiling_face_with_smiling_eyes:"]
 responses = []
+chance = 0.4
 
-[patterns."<user>?(, )?(bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?|talk to you (\\w* )?later)(?!\\S)"]
+[patterns."bye|fare well|see (you|u|ya)|cya|l(at|8)er|(cu|c u)!?|talk to you (\\w* )?later"]
 reactions = [":waving_hand:"]
 responses = ["Take care!", "See you around!", "Hope to see you back, soon!"]
 
-[patterns."<user>?(, )?((I )?(love|:red_heart:) (you|u|ya)|hug)(?!\\S)"]
+[patterns."(love|:red_heart:) (you|u|ya)|hug"]
 reactions = [":red_heart:", ":heart_on_fire:", ":revolving_hearts:"]
 responses = ["Aww!", "You're sweet!", "Cute ~"]
 
-[patterns."<user>?(, )?((I|we )?(thank (you|u|ya))|thankies|thanks)(?!\\S)"]
+[patterns."(thank (you|u|ya))|thankies|thanks"]
 reactions = [":OK_hand:", ":smiling_face_with_smiling_eyes:"]
 responses = []
+chance = 0.4
