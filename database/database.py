@@ -21,9 +21,7 @@ async def do_migrations(db_file: Path, defaults: Dict[str, Any]) -> None:
 
 
 class BaseStore:
-    """The base storage class which is inherited by all classes that handle database interactions.
-    WARNING: Does not sanitize the input.
-    """
+    """The base storage class which is inherited by all classes that handle database interactions."""
 
     def __init__(self, db_file: Path):
         self.db_file = db_file
