@@ -32,7 +32,7 @@ class Moderation(commands.Cog, name='Moderation'):
         await ctx.send(f'pong! {round(1_000 * self.bot.latency)} ms', ephemeral=True)
 
     @commands.hybrid_command(aliases=['hl'])
-    async def helpline(self, ctx: commands.Context):
+    async def helpline(self, ctx: commands.Context) -> None:
         """Send link to website with suicide prevention helplines."""
         await ctx.send('https://findahelpline.com/')
 
