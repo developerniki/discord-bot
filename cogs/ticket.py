@@ -167,8 +167,8 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                 header = f'Transcript of ticket #{ticket.id}, created at {created_at} for ' \
                          f'user {tools.user_string(ticket_user)}'
                 if ticket.reason:
-                    header += f' with reason "{ticket.reason}" '
-                header += f'and closed at {closed_at}\n'
+                    header += f' with reason "{ticket.reason}"'
+                header += f' and closed at {closed_at}\n'
 
                 txt_log = [header]
 
