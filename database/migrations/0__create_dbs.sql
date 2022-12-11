@@ -54,5 +54,5 @@ CREATE TABLE IF NOT EXISTS VerificationRequests(
     joined_at BIGINT NOT NULL,
     closed_at BIGINT,
     age VARCHAR,
-    gender VARCHAR,
+    gender VARCHAR
 );
