@@ -111,7 +111,7 @@ class VerificationRequestStore(BaseStore):
             user_verification = VerificationRequest(user_verification_id=cur.lastrowid, guild_id=guild_id,
                                                     user_id=user_id, join_channel_id=join_channel_id,
                                                     join_message_id=join_message_id, verified=False,
-                                                    joined_at=joined_at, closed_at=None)
+                                                    joined_at=joined_at, closed_at=None, age=age, gender=gender)
             return user_verification
 
     async def close(self, verification_request: VerificationRequest, verified: bool) -> None:
