@@ -4,9 +4,10 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+import aiosqlite
 import discord
 from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User
-from discord.ext import commands
+from discord.ext import commands, tasks
 from emoji import emojize
 
 from database import VerificationRequest, VerificationSettingStore, VerificationRequestStore
@@ -47,6 +48,12 @@ class VerificationSystem(commands.Cog, name='Verification System'):
 
             self._views_added = True
 
+    @tasks.loop(minutes=60)
+    async def give_button_to_unverified_users(self):
+        # TODO Give the verification to users who didn't already verify. Check user didn't just join.
+        #  Kick users who haven't verified within a week.
+        pass
+
     async def __create_verification_button(self, user: User | Member) -> bool:
         """Creates the button to start the verification process for `user`.
 
@@ -84,6 +91,9 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             description = join_message
             embed = Embed(title=f'Welcome to {user.guild.name}!', description=description,
                           color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
+            embed.set_author(name=tools.user_string(user),
+                             url=f'https://discordapp.com/users/{user.id}',
+                             icon_url=user.display_avatar)
             file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             await join_channel.send(embed=embed, file=file, view=verification_request_view)
@@ -101,8 +111,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     @commands.Cog.listener()
     async def on_member_leave(self, member: Member) -> None:
         pass
-        # TODO Remove verification request buttons and join message if verification is incomplete.
-        # join_message = self.verification_request_store
+        # TODO Modify verification request button and remove join message if verification is incomplete.
 
     @commands.hybrid_group()
     @commands.has_guild_permissions(manage_roles=True, manage_channels=True)
@@ -150,7 +159,8 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             guild_id=ctx.guild.id,
             role_id=verification_role.id
         )
-        await ctx.send('Everything set up for the verification system to work!', ephemeral=True)
+        await ctx.send('Everything set up for the verification system to work! You might also want to set the adult '
+                       'role using the `/adultrole command.`', ephemeral=True)
 
     @verification.command()
     async def joinchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
@@ -170,7 +180,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     async def joinmessage(self, ctx: commands.Context, *, message: Optional[str]) -> None:
         """Get or set the join message, depending on whether `message` is present."""
         if message is None:
-            message = await self.verification_settings_store.get_join_message(ctx.guild.id)  # TODO
+            message = await self.verification_settings_store.get_join_message(ctx.guild.id)
             if message is None:
                 await ctx.send(f'The join message is not configured yet.', ephemeral=True)
             else:
@@ -233,7 +243,21 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                 await ctx.send(f'The verification role is {role.mention}.', ephemeral=True)
         else:
             await self.verification_settings_store.set_verification_role_id(guild_id=ctx.guild.id, role_id=role.id)
-            await ctx.send(f'The verification request channel has been set to {role.mention}.', ephemeral=True)
+            await ctx.send(f'The verification role has been set to {role.mention}.', ephemeral=True)
+
+    @verification.command()
+    async def adult_role(self, ctx: commands.Context, role: Optional[Role]) -> None:
+        """Get or set the adult role, depending on whether `role` is present."""
+        if role is None:
+            role_id = await self.verification_settings_store.get_verification_role_id(ctx.guild.id)
+            role = role_id and ctx.guild.get_role(role_id)
+            if role is None:
+                await ctx.send(f'The adult role is not configured yet.', ephemeral=True)
+            else:
+                await ctx.send(f'The adult role is {role.mention}.', ephemeral=True)
+        else:
+            await self.verification_settings_store.set_verification_role_id(guild_id=ctx.guild.id, role_id=role.id)
+            await ctx.send(f'The adult role has been set to {role.mention}.', ephemeral=True)
 
 
 class MissingWelcomeMessageError(Exception):
@@ -243,15 +267,15 @@ class MissingWelcomeMessageError(Exception):
 
 class VerificationRequestView(ui.View):
     """A button that allows a user to request verification."""
+    mention_pattern = re.compile('<@!?([0-9]+)>')
 
     def __init__(self, verification_system: VerificationSystem) -> None:
         super().__init__(timeout=None)
         self.vs = verification_system
 
     async def interaction_check(self, interaction: Interaction) -> bool:
-        mention_pattern = re.compile('<@!?([0-9]+)>')
         embed_description = interaction.message.embeds[0].description
-        mentioned_user_ids = mention_pattern.findall(embed_description)
+        mentioned_user_ids = self.mention_pattern.findall(embed_description)
         mentioned_user_ids = [int(x) for x in mentioned_user_ids]
         if interaction.user.id not in mentioned_user_ids:
             _logger.info(f"{tools.user_string(interaction.user)} clicked someone else's verification button.")
@@ -279,10 +303,11 @@ class ChooseBasicInfoView(ui.View):
     def __init__(self, verification_system: VerificationSystem) -> None:
         super().__init__(timeout=None)
         self.vs = verification_system
-        # Thirteen is the minimum age Discord allows.
+        # Thirteen is the minimum age Discord allows. Because this age is parsed later, do not change the format when
+        # adding or removing values!
         self.age_ranges = ('13', '14', '15', '16', '17', '18', '19', '20-24', '25-29', '30-39', '40-49', '50-59', '60+')
         self.age_range_select = ui.Select(
-            placeholder="What's your age-range?",
+            placeholder="What's your age?",
             options=[SelectOption(label=label) for label in self.age_ranges],
             custom_id='select_age_range'
         )
@@ -295,7 +320,6 @@ class ChooseBasicInfoView(ui.View):
             options=[
                 SelectOption(label='male', emoji=emojize(':male_sign:')),
                 SelectOption(label='female', emoji=emojize(':female_sign:')),
-                # TODO Use proper non-binary symbol.
                 SelectOption(label='non-binary', emoji=emojize(':keycap_0:')),
             ],
             custom_id='select_gender'
@@ -398,13 +422,15 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
             user_id=interaction.user.id,
             join_channel_id=self.welcome_message.channel.id,
             join_message_id=self.welcome_message.id,
+            age=self.age_range,
+            gender=self.gender
         )
 
         # Create the verification notification embed.
         description = f'User {interaction.user.mention} wants to be verified. They provided the following information.'
         embed = Embed(title='Verification Request', description=description, color=discord.Color.blue(),
                       timestamp=datetime.now(timezone.utc))
-        embed.add_field(name='age-range', value=self.age_range)
+        embed.add_field(name='age', value=self.age_range)
         embed.add_field(name='gender', value=self.gender)
         embed.add_field(name='referrer', value=self.referrer_text_input.value)
         embed.add_field(name='join reason', value=self.join_reason_text_input.value)
@@ -487,8 +513,7 @@ class VerificationNotificationView(ui.View):
                 _logger.info(f"{tools.user_string(interaction.user)} accepted {tools.user_string(member)}'s "
                              "verification request.")
 
-                # Assign the verification role to the user.
-                # TODO Assign the other roles (gender and age-range).
+                # Assign the verification and adult (if eligible) roles to the user.
                 role_id = await self.vs.verification_settings_store.get_verification_role_id(interaction.guild_id)
                 role = interaction.guild.get_role(role_id)
                 try:
@@ -500,6 +525,16 @@ class VerificationNotificationView(ui.View):
                         ephemeral=True
                     )
                     return
+
+                min_age = self.verification_request.age.replace('+', '')
+                min_age = re.match('(?P<min_age>\d+)(?P<max_age>-\d+)?', min_age).group('min_age')
+                min_age = int(min_age)
+                if min_age >= 18:
+                    adult_role_id = await self.vs.verification_settings_store.get_adult_role_id(interaction.guild_id)
+                    adult_role = interaction.guild.get_role(adult_role_id)
+                    if adult_role is not None:
+                        await member.add_roles(adult_role, reason=f'verify the user, assigning adult role as age is at '
+                                                                  f'least {min_age}')
 
                 # Store the decision to verify the user in the database.
                 await self.vs.verification_request_store.close(self.verification_request, True)
