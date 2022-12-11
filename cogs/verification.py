@@ -246,7 +246,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The verification role has been set to {role.mention}.', ephemeral=True)
 
     @verification.command()
-    async def adult_role(self, ctx: commands.Context, role: Optional[Role]) -> None:
+    async def adultrole(self, ctx: commands.Context, role: Optional[Role]) -> None:
         """Get or set the adult role, depending on whether `role` is present."""
         if role is None:
             role_id = await self.verification_settings_store.get_verification_role_id(ctx.guild.id)
