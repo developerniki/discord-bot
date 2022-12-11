@@ -12,7 +12,8 @@ class VerificationRequest:
     """The in-memory representation of a user verification in the database."""
 
     def __init__(self, user_verification_id: int, guild_id: int, user_id: int, join_channel_id: int,
-                 join_message_id: int, verified: bool, joined_at: int, closed_at: Optional[int]) -> None:
+                 join_message_id: int, verified: bool, joined_at: int, closed_at: Optional[int], age: str,
+                 gender: str) -> None:
         self.id = user_verification_id
         self.guild_id = guild_id
         self.user_id = user_id
@@ -21,6 +22,8 @@ class VerificationRequest:
         self.verified = verified
         self.joined_at = joined_at
         self.closed_at = closed_at
+        self.age = age
+        self.gender = gender
 
 
 class VerificationSettingStore(BaseStore):
@@ -71,12 +74,13 @@ class VerificationSettingStore(BaseStore):
     async def set_verification_role_id(self, guild_id: int, role_id: int) -> None:
         await self.set_setting(guild_id, 'verification_role_id', role_id)
 
-    async def get_nonbinary_emoji(self, guild_id: int) -> str:
-        nonbinary_emoji = await self.get_setting(guild_id, 'nonbinary_emoji')
-        return nonbinary_emoji
+    async def get_adult_role_id(self, guild_id: int) -> int:
+        channel_id = await self.get_setting(guild_id, 'adult_role_id')
+        return channel_id
 
-    async def set_nonbinary_emoji(self, guild_id: int, emoji: str) -> None:
-        await self.set_setting(guild_id, 'nonbinary_emoji', emoji)
+    async def set_adult_role_id(self, guild_id: int, role_id: int) -> None:
+        await self.set_setting(guild_id, 'adult_role_id', role_id)
+
 
 class VerificationRequestStore(BaseStore):
     """Handles database access with the `VerificationRequests` table."""
@@ -85,7 +89,7 @@ class VerificationRequestStore(BaseStore):
         super().__init__(db_file)
 
     async def create(self, guild_id: int, user_id: int, join_channel_id: int,
-                     join_message_id: int) -> VerificationRequest:
+                     join_message_id: int, age: str, gender: str) -> VerificationRequest:
         async with aiosqlite.connect(self.db_file) as con:
             statement = """INSERT INTO
                         VerificationRequests(
@@ -94,12 +98,15 @@ class VerificationRequestStore(BaseStore):
                             join_channel_id,
                             join_message_id,
                             verified,
-                            joined_at
+                            joined_at,
+                            age,
+                            gender
                         )
-                        VALUES (?, ?, ?, ?, FALSE, ?)
+                        VALUES (?, ?, ?, ?, FALSE, ?, ?, ?)
                         """
             joined_at = tools.unix_seconds_from_discord_snowflake_id(join_message_id)
-            cur = await con.execute(statement, (guild_id, user_id, join_channel_id, join_message_id, joined_at))
+            cur = await con.execute(statement,
+                                    (guild_id, user_id, join_channel_id, join_message_id, joined_at, age, gender))
             await con.commit()
             user_verification = VerificationRequest(user_verification_id=cur.lastrowid, guild_id=guild_id,
                                                     user_id=user_id, join_channel_id=join_channel_id,
@@ -129,10 +136,12 @@ class VerificationRequestStore(BaseStore):
                     join_message_id=join_message_id,
                     verified=verified,
                     joined_at=joined_at,
-                    closed_at=closed_at
+                    closed_at=closed_at,
+                    age=age,
+                    gender=gender
                 )
                 for
-                user_verification_id, guild_id, user_id, join_channel_id, join_message_id, verified, joined_at, closed_at
+                user_verification_id, guild_id, user_id, join_channel_id, join_message_id, verified, joined_at, closed_at, age, gender
                 in verification_requests_raw
             ]
             return verification_requests
