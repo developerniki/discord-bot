@@ -249,14 +249,14 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     async def adultrole(self, ctx: commands.Context, role: Optional[Role]) -> None:
         """Get or set the adult role, depending on whether `role` is present."""
         if role is None:
-            role_id = await self.verification_settings_store.get_verification_role_id(ctx.guild.id)
+            role_id = await self.verification_settings_store.get_adult_role_id(ctx.guild.id)
             role = role_id and ctx.guild.get_role(role_id)
             if role is None:
                 await ctx.send(f'The adult role is not configured yet.', ephemeral=True)
             else:
                 await ctx.send(f'The adult role is {role.mention}.', ephemeral=True)
         else:
-            await self.verification_settings_store.set_verification_role_id(guild_id=ctx.guild.id, role_id=role.id)
+            await self.verification_settings_store.set_adult_role_id(guild_id=ctx.guild.id, role_id=role.id)
             await ctx.send(f'The adult role has been set to {role.mention}.', ephemeral=True)
 
 
