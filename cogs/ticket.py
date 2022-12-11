@@ -133,7 +133,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                 f'Closing the ticket {ctx.channel.mention} and generating the logs. This might take a while.'
             )
 
-            # Fetch all messages. # TODO Also store images.
+            # Fetch all messages.
             log = [message async for message in ctx.channel.history(limit=None, oldest_first=True)]
             log_dict = [
                 {
@@ -298,7 +298,8 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                 await ctx.send(f'The ticket request channel is {channel.mention}.', ephemeral=True)
         else:
             await self.ticket_settings_store.set_request_channel_id(guild_id=ctx.guild.id, channel_id=channel.id)
-            await ctx.send(f'The ticket request channel has been set to {channel.mention}.', ephemeral=True)
+            await ctx.send(f'The ticket request channel has been set to {channel.mention}. You might also want to set '
+                           f'the ticket log channel using the `/logchannel` command.', ephemeral=True)
 
     @ticket.command()
     async def logchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
