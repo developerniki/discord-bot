@@ -160,7 +160,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             role_id=verification_role.id
         )
         await ctx.send('Everything set up for the verification system to work! You might also want to set the adult '
-                       'role using the `/adultrole command.`', ephemeral=True)
+                       'role using the `/adultrole` command.', ephemeral=True)
 
     @verification.command()
     async def joinchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
