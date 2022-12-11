@@ -48,22 +48,22 @@ class Fun(commands.Cog, name='Fun'):
         if not self._views_added:
             pass
 
-    @commands.Cog.listener()
-    async def on_message(self, message: Message) -> None:
-        if message.author.bot:
-            return
-
-        for pattern_action in self.pattern_to_action:
-            if pattern_action.match_lower_with_chance(message.content):
-                _logger.info(f'Responding to pattern in message "{message.content}" by user '
-                             f'{tools.user_string(message.author)}.')
-                reaction = pattern_action.random_reaction()
-                response = pattern_action.random_response()
-                if reaction is not None:
-                    await message.add_reaction(reaction)
-                if response is not None:
-                    await message.reply(content=response)
-                break
+    # @commands.Cog.listener()
+    # async def on_message(self, message: Message) -> None:
+    #     if message.author.bot:
+    #         return
+    #
+    #     for pattern_action in self.pattern_to_action:
+    #         if pattern_action.match_lower_with_chance(message.content):
+    #             _logger.info(f'Responding to pattern in message "{message.content}" by user '
+    #                          f'{tools.user_string(message.author)}.')
+    #             reaction = pattern_action.random_reaction()
+    #             response = pattern_action.random_response()
+    #             if reaction is not None:
+    #                 await message.add_reaction(reaction)
+    #             if response is not None:
+    #                 await message.reply(content=response)
+    #             break
 
     @commands.hybrid_command()
     async def hug(self, ctx: commands.Context, user: User):
