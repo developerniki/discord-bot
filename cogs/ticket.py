@@ -46,6 +46,9 @@ class TicketSystem(commands.Cog, name='Ticket System'):
 
             self._views_added = True
 
+        # Start task loops.
+        self.close_due_ticket_request_channels.start()
+
     @tasks.loop(hours=1)
     async def close_due_ticket_request_channels(self):
         channel_ids = await self.ticket_request_store.get_due_channel_ids(seconds=24 * 60 * 60)

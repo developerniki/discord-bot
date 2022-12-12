@@ -336,7 +336,7 @@ class TicketRequestStore(BaseStore):
         async with aiosqlite.connect(self.db_file) as con:
             statement = """SELECT channel_id
                         FROM TicketRequests
-                        WHERE status="rejected" AND IFNULL(MAX(rejected_at) - ?, 0) > ?
+                        WHERE status="rejected" AND (? - IFNULL(closed_at, 0)) > ?
                         """
             cur = await con.execute(statement, (round(time.time()), seconds))
             due_channel_ids = await cur.fetchall()
