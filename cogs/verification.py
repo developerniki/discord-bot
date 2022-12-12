@@ -1,7 +1,9 @@
 import asyncio
 import logging
 import re
+import time
 from datetime import datetime, timezone
+from threading import Thread
 from typing import Optional
 
 import aiosqlite
@@ -15,6 +17,11 @@ from database import VerificationRequest, VerificationSettingStore, Verification
 from slimbot import SlimBot, tools
 
 _logger = logging.getLogger(__name__)
+
+# TODO Refactor.
+NUM_VERIFICATION_REMINDERS_BEFORE_KICK = 10
+REMIND_TO_VERIFY_EVERY_N_SECS = 4 * 3600
+N_SECS_BETWEEN_VERIFICATION_REMINDERS = 60
 
 
 class VerificationSystem(commands.Cog, name='Verification System'):
@@ -51,7 +58,12 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             self._views_added = True
 
         # Start task loops.
-        self.give_button_to_unverified_users_without_active_verification_request.start()
+        async def task():
+            # TODO Refactor.
+            await asyncio.sleep(REMIND_TO_VERIFY_EVERY_N_SECS)
+            self.give_button_to_unverified_users_without_active_verification_request.start()
+
+        asyncio.create_task(task())
 
     async def member_is_verified(self, guild: Guild, member: Member) -> bool:
         verified = False
@@ -61,13 +73,13 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                 break
         return verified
 
-    @tasks.loop(hours=4)
+    @tasks.loop(seconds=REMIND_TO_VERIFY_EVERY_N_SECS)
     async def give_button_to_unverified_users_without_active_verification_request(self) -> None:
-        NUM_BEFORE_KICK = 10
         _logger.info('Giving buttons to unverified users')
 
         verification_requests = await self.verification_request_store.get_pending()
         user_ids_with_active_requests = {request.user_id for request in verification_requests}
+        # TODO When user is verified or leaves or joins, clear ALL active requests.
 
         unverified_members = []
         for guild in self.bot.guilds:
@@ -77,14 +89,16 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                     unverified_members.append(member)
 
         for member in unverified_members:
-            if await self.active_verification_messages_store.num(guild_id=guild.id,
-                                                                 user_id=member.id) > NUM_BEFORE_KICK:
+            if await self.active_verification_messages_store.num(
+                    guild_id=guild.id,
+                    user_id=member.id
+            ) > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
                 await member.kick(reason='user did not verify')
                 _logger.info(f'Kicked {tools.user_string(member)} because they did not verify')
             else:
                 await self.__create_verification_button(member)
                 # TODO Make this timer guild independent.
-                await asyncio.sleep(60)
+                await asyncio.sleep(N_SECS_BETWEEN_VERIFICATION_REMINDERS)
 
     async def __create_verification_button(self, user: User | Member) -> bool:
         """Creates the button to start the verification process for `user`.
