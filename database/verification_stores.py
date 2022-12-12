@@ -161,7 +161,7 @@ class VerificationRequestStore(BaseStore):
         async with aiosqlite.connect(self.db_file) as con:
             statement = """SELECT join_message_id FROM VerificationRequests WHERE guild_id=? AND user_id=?"""
             cur = await con.execute(statement, (guild_id, user_id))
-            join_message_id = cur.fetchone()
+            join_message_id = await cur.fetchone()
             join_message_id = join_message_id and join_message_id[0]
             return join_message_id
 
@@ -206,7 +206,7 @@ class ActiveVerificationMessageStore(BaseStore):
             ]
             return active_verification_messages
 
-    async def num(self, guild_id: int, user_id: int) -> None:
+    async def num(self, guild_id: int, user_id: int) -> int:
         async with aiosqlite.connect(self.db_file) as con:
             statement = """SELECT COUNT(*) FROM ActiveVerificationMessages WHERE guild_id=? AND user_id=?"""
             cur = await con.execute(statement, (guild_id, user_id))
