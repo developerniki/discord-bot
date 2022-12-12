@@ -56,3 +56,11 @@ CREATE TABLE IF NOT EXISTS VerificationRequests(
     age VARCHAR,
     gender VARCHAR
 );
+
+CREATE TABLE IF NOT EXISTS ActiveVerificationMessages(
+    id BIGINT PRIMARY KEY,
+    guild_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    channel_id BIGINT NOT NULL,
+    created_at BIGINT NOT NULL
+);

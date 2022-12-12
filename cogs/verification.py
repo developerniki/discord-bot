@@ -119,6 +119,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         pass
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def button(self, ctx: commands.Context, user: User):
         """Create a verification button for `user`."""
         success = await self.__create_verification_button(user)
@@ -131,6 +132,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'Created a verification button at {join_channel.mention}.', ephemeral=True)
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def setup(self, ctx: commands.Context, join_channel: TextChannel, join_message: str,
                     welcome_channel: TextChannel, welcome_message: str, request_channel: TextChannel,
                     verification_role: Role) -> None:
@@ -163,6 +165,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                        'role using the `/adultrole` command.', ephemeral=True)
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def joinchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
         """Get or set the join channel, depending on whether `channel` is present."""
         if channel is None:
@@ -177,6 +180,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The join channel has been set to {channel.mention}.', ephemeral=True)
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def joinmessage(self, ctx: commands.Context, *, message: Optional[str]) -> None:
         """Get or set the join message, depending on whether `message` is present."""
         if message is None:
@@ -190,6 +194,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The join message has been set to `{message}`.', ephemeral=True)
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def welcomechannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
         """Get or set the welcome channel, depending on whether `channel` is present."""
         if channel is None:
@@ -205,6 +210,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The welcome channel has been set to {channel.mention}.', ephemeral=True)
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def welcomemessage(self, ctx: commands.Context, *, message: Optional[str]) -> None:
         """Get or set the welcome message, depending on whether `message` is present."""
         if message is None:
@@ -218,6 +224,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The welcome message has been set to `{message}`.', ephemeral=True)
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def requestchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
         """Get or set the verification request channel, depending on whether `channel` is present."""
         if channel is None:
@@ -232,6 +239,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The verification request channel has been set to {channel.mention}.', ephemeral=True)
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def role(self, ctx: commands.Context, role: Optional[Role]) -> None:
         """Get or set the verification role, depending on whether `role` is present."""
         if role is None:
@@ -246,6 +254,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The verification role has been set to {role.mention}.', ephemeral=True)
 
     @verification.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def adultrole(self, ctx: commands.Context, role: Optional[Role]) -> None:
         """Get or set the adult role, depending on whether `role` is present."""
         if role is None:

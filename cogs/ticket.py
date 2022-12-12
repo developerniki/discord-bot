@@ -61,6 +61,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         pass
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def create(self, ctx: commands.Context, member: User, reason: Optional[str] = None) -> None:
         """Create a new ticket."""
         # Get the ticket request channel.
@@ -125,6 +126,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         await ctx.send(f"Successfully created a ticket at channel {channel.mention}.", ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def close(self, ctx: commands.Context) -> None:
         """Close the ticket."""
         if await self.ticket_store.is_ticket_channel(ctx.channel.id):
@@ -205,6 +207,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             await ctx.send(f'{ctx.channel.mention} is not a ticket channel!', ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def button(self, ctx: commands.Context) -> None:
         """Create a ticket request button."""
         channel_id = await self.ticket_settings_store.get_request_channel_id(ctx.guild.id)
@@ -217,6 +220,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             await ctx.send(f'Created the ticket request button with target channel {channel.mention}.', ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def add(self, ctx: commands.Context, user: discord.Member, allow_send_messages: bool = True) -> None:
         """Add `user` to this ticket channel."""
         is_ticket_channel = await self.ticket_store.is_ticket_channel(ctx.channel.id)
@@ -236,6 +240,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel!', ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def remove(self, ctx: commands.Context, user: discord.Member) -> None:
         """Remove `user` from this ticket channel."""
         is_ticket_channel = await self.ticket_store.is_ticket_channel(ctx.channel.id)
@@ -251,6 +256,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel!', ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def mute(self, ctx: commands.Context, user: discord.Member) -> None:
         """Mute `user` in this ticket channel."""
         is_ticket_channel = await self.ticket_store.is_ticket_channel(ctx.channel.id)
@@ -269,6 +275,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel!', ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def unmute(self, ctx: commands.Context, user: discord.Member) -> None:
         """Unmute `user` in this ticket channel."""
         is_ticket_channel = await self.ticket_store.is_ticket_channel(ctx.channel.id)
@@ -287,6 +294,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel!', ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def requestchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
         """Get or set the ticket request channel, depending on whether `channel` is present."""
         if channel is None:
@@ -302,6 +310,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                            f'the ticket log channel using the `/logchannel` command.', ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def logchannel(self, ctx: commands.Context, channel: Optional[TextChannel]) -> None:
         """Get or set the ticket log channel, depending on whether `channel` is present."""
         if channel is None:
@@ -316,6 +325,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             await ctx.send(f'The ticket log channel has been set to {channel.mention}.', ephemeral=True)
 
     @ticket.command()
+    @commands.has_guild_permissions(manage_channels=True)
     async def cooldown(self, ctx: commands.Context, user: Optional[User], cooldown_in_secs: Optional[int]) -> None:
         """Get or set the guild's or user's ticket request cooldown, depending on which arguments are present."""
         if cooldown_in_secs is not None and cooldown_in_secs < 0:
@@ -354,6 +364,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                                ephemeral=True)
 
     @ticket.command(hidden=True)
+    @commands.has_guild_permissions(manage_channels=True)
     async def clear(self, ctx: commands.Context, user: User) -> None:
         """WARNING: Only use when something is broken. Close tickets and reject pending requests for `user`."""
         # TODO Deactivate ticket notification views.
