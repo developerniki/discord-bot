@@ -134,6 +134,9 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             _logger.info(f'{tools.user_string(member)} is a bot, so not making a verification button.')
         else:
             await self.__create_verification_button(member)
+            # To be safe, reset the stored active verification messages
+            # (so the user is not accidentally kicked by reaching the threshold)
+            await self.active_verification_messages_store.delete(guild_id=member.guild.id, user_id=member.id)
 
     @commands.Cog.listener()
     async def on_member_leave(self, member: Member) -> None:
