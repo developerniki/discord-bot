@@ -64,6 +64,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     @tasks.loop(hours=4)
     async def give_button_to_unverified_users(self) -> None:
         NUM_BEFORE_KICK = 10
+        _logger.info('Giving buttons to unverified users')
 
         unverified_members = []
         for guild in self.bot.guilds:
@@ -75,9 +76,10 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             if await self.active_verification_messages_store.num(guild_id=guild.id,
                                                                  user_id=member.id) > NUM_BEFORE_KICK:
                 await member.kick(reason='user did not verify')
-                _logger.info(f'Kicked {tools.user_string(member)} because they did not veriy')
+                _logger.info(f'Kicked {tools.user_string(member)} because they did not verify')
             else:
                 await self.__create_verification_button(member)
+                # TODO Make this timer guild independent.
                 await asyncio.sleep(30)
 
     async def __create_verification_button(self, user: User | Member) -> bool:
