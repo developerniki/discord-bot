@@ -51,7 +51,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             self._views_added = True
 
         # Start task loops.
-        self.give_button_to_unverified_users.start()
+        self.give_button_to_unverified_users_without_active_verification_request.start()
 
     async def member_is_verified(self, guild: Guild, member: Member) -> bool:
         verified = False
@@ -62,14 +62,18 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         return verified
 
     @tasks.loop(hours=4)
-    async def give_button_to_unverified_users(self) -> None:
+    async def give_button_to_unverified_users_without_active_verification_request(self) -> None:
         NUM_BEFORE_KICK = 10
         _logger.info('Giving buttons to unverified users')
+
+        verification_requests = await self.verification_request_store.get_pending()
+        user_ids_with_active_requests = {request.user_id for request in verification_requests}
 
         unverified_members = []
         for guild in self.bot.guilds:
             for member in guild.members:
-                if not member.bot and not await self.member_is_verified(guild, member):
+                has_active_request = member.id in user_ids_with_active_requests
+                if not member.bot and not await self.member_is_verified(guild, member) and not has_active_request:
                     unverified_members.append(member)
 
         for member in unverified_members:
@@ -80,7 +84,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             else:
                 await self.__create_verification_button(member)
                 # TODO Make this timer guild independent.
-                await asyncio.sleep(30)
+                await asyncio.sleep(60)
 
     async def __create_verification_button(self, user: User | Member) -> bool:
         """Creates the button to start the verification process for `user`.
