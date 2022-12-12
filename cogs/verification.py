@@ -6,11 +6,12 @@ from typing import Optional
 
 import aiosqlite
 import discord
-from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User
+from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User, Guild
 from discord.ext import commands, tasks
 from emoji import emojize
 
-from database import VerificationRequest, VerificationSettingStore, VerificationRequestStore
+from database import VerificationRequest, VerificationSettingStore, VerificationRequestStore, \
+    ActiveVerificationMessageStore, ActiveVerificationMessage
 from slimbot import SlimBot, tools
 
 _logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
 
         self.verification_settings_store = VerificationSettingStore(self.bot.config.db_file)
         self.verification_request_store = VerificationRequestStore(self.bot.config.db_file)
+        self.active_verification_messages_store = ActiveVerificationMessageStore(self.bot.config.db_file)
         self._views_added = False
 
     @commands.Cog.listener()
@@ -48,11 +50,35 @@ class VerificationSystem(commands.Cog, name='Verification System'):
 
             self._views_added = True
 
-    @tasks.loop(minutes=60)
-    async def give_button_to_unverified_users(self):
-        # TODO Give the verification to users who didn't already verify. Check user didn't just join.
-        #  Kick users who haven't verified within a week.
-        pass
+        # Start task loops.
+        self.give_button_to_unverified_users.start()
+
+    async def member_is_verified(self, guild: Guild, member: Member) -> bool:
+        verified = False
+        for role in member.roles:
+            if role.id == await self.verification_settings_store.get_verification_role_id(guild.id):
+                verified = True
+                break
+        return verified
+
+    @tasks.loop(hours=4)
+    async def give_button_to_unverified_users(self) -> None:
+        NUM_BEFORE_KICK = 10
+
+        unverified_members = []
+        for guild in self.bot.guilds:
+            for member in guild.members:
+                if not member.bot and not await self.member_is_verified(guild, member):
+                    unverified_members.append(member)
+
+        for member in unverified_members:
+            if await self.active_verification_messages_store.num(guild_id=guild.id,
+                                                                 user_id=member.id) > NUM_BEFORE_KICK:
+                await member.kick(reason='user did not verify')
+                _logger.info(f'Kicked {tools.user_string(member)} because they did not veriy')
+            else:
+                await self.__create_verification_button(member)
+                await asyncio.sleep(30)
 
     async def __create_verification_button(self, user: User | Member) -> bool:
         """Creates the button to start the verification process for `user`.
@@ -80,7 +106,6 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             _logger.warning('One of the necessary settings is not configured/not configured properly for the '
                             'verification system to work!')
             success = False
-            return success
         else:
             _logger.info(f'Making a verification button for {tools.user_string(user)}.')
             verification_request_view = VerificationRequestView(self)
@@ -96,9 +121,11 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                              icon_url=user.display_avatar)
             file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
-            await join_channel.send(embed=embed, file=file, view=verification_request_view)
+            message = await join_channel.send(embed=embed, file=file, view=verification_request_view)
+            await self.active_verification_messages_store.create(message_id=message.id, guild_id=user.guild.id,
+                                                                 user_id=user.id, channel_id=join_channel.id)
             success = True
-            return success
+        return success
 
     @commands.Cog.listener()
     async def on_member_join(self, member: Member) -> None:
@@ -110,8 +137,9 @@ class VerificationSystem(commands.Cog, name='Verification System'):
 
     @commands.Cog.listener()
     async def on_member_leave(self, member: Member) -> None:
-        pass
-        # TODO Modify verification request button and remove join message if verification is incomplete.
+        await self.active_verification_messages_store.delete(guild_id=member.guild.id, user_id=member.id)
+        # TODO Modify verification request button if verification is incomplete and user leaves.
+        await self.remove_welcome_messages(guild=member.guild, user=member)
 
     @commands.hybrid_group()
     @commands.has_guild_permissions(manage_roles=True, manage_channels=True)
@@ -267,6 +295,19 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         else:
             await self.verification_settings_store.set_adult_role_id(guild_id=ctx.guild.id, role_id=role.id)
             await ctx.send(f'The adult role has been set to {role.mention}.', ephemeral=True)
+
+    async def remove_welcome_messages(self, guild: Guild, user: User | Member):
+        messages = await self.active_verification_messages_store.get(guild_id=guild.id, user_id=user.id)
+        for message_ in messages:
+            message_: ActiveVerificationMessage
+            channel = self.bot.get_channel(message_.channel_id)
+            try:
+                message = await channel.fetch_message(message_.id)
+                if message is not None:
+                    await message.delete()
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+        await self.active_verification_messages_store.delete(guild_id=guild.id, user_id=user.id)
 
 
 class MissingWelcomeMessageError(Exception):
@@ -571,9 +612,15 @@ class VerificationNotificationView(ui.View):
             # Remove the welcome message from the join channel. At this point, if it does not exist, we do not care.
             join_channel_id = self.verification_request.join_channel_id
             join_channel = self.vs.bot.get_channel(join_channel_id)
-            join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
-            if join_message is not None:
-                await join_message.delete()
+            try:
+                join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
+                if join_message is not None:
+                    await join_message.delete()
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+
+            # Remove other welcome messages.
+            await self.vs.remove_welcome_messages(guild=interaction.guild, user=member)
 
             # Stop listening to the view and deactivate it.
             self.stop()
@@ -665,9 +712,15 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
                 guild_id=interaction.guild_id)
             join_channel = self.vs.bot.get_channel(join_channel_id)
             if join_channel is not None:
-                join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
-                if join_message is not None:
-                    await join_message.delete()
+                try:
+                    join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
+                    if join_message is not None:
+                        await join_message.delete()
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+
+            # Remove other welcome messages.
+            await self.vs.remove_welcome_messages(guild=interaction.guild, user=member)
 
         # Modify verification notification message.
         # The lock and `is_finished()` call ensure that the view is only responded to once.
