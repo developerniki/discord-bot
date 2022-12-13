@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import re
 import time
 from datetime import datetime, timezone
@@ -87,6 +88,8 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                 has_active_request = member.id in user_ids_with_active_requests
                 if not member.bot and not await self.member_is_verified(guild, member) and not has_active_request:
                     unverified_members.append(member)
+
+        random.shuffle(unverified_members)
 
         for member in unverified_members:
             if await self.active_verification_messages_store.num(
