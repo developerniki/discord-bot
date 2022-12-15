@@ -109,7 +109,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                 else:
                     await self.__create_verification_button(member)
                     # TODO Make this timer guild independent.
-                    await asyncio.sleep(N_SECS_BETWEEN_VERIFICATION_REMINDERS)
+            await asyncio.sleep(N_SECS_BETWEEN_VERIFICATION_REMINDERS)
 
     async def __create_verification_button(self, user: User | Member) -> bool:
         """Creates the button to start the verification process for `user`.
