@@ -92,16 +92,19 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         random.shuffle(unverified_members)
 
         for member in unverified_members:
-            if await self.active_verification_messages_store.num(
-                    guild_id=guild.id,
-                    user_id=member.id
-            ) > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
-                await member.kick(reason='user did not verify')
-                _logger.info(f'Kicked {tools.user_string(member)} because they did not verify')
-            else:
-                await self.__create_verification_button(member)
-                # TODO Make this timer guild independent.
-                await asyncio.sleep(N_SECS_BETWEEN_VERIFICATION_REMINDERS)
+            has_active_request = member.id in user_ids_with_active_requests
+            # In case member verified / requested verification in the meantime, we need to take this into account.
+            if not await self.member_is_verified(guild, member) and not has_active_request:
+                if await self.active_verification_messages_store.num(
+                        guild_id=guild.id,
+                        user_id=member.id
+                ) > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
+                    await member.kick(reason='user did not verify')
+                    _logger.info(f'Kicked {tools.user_string(member)} because they did not verify')
+                else:
+                    await self.__create_verification_button(member)
+                    # TODO Make this timer guild independent.
+                    await asyncio.sleep(N_SECS_BETWEEN_VERIFICATION_REMINDERS)
 
     async def __create_verification_button(self, user: User | Member) -> bool:
         """Creates the button to start the verification process for `user`.
