@@ -170,7 +170,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await self.active_verification_messages_store.delete(guild_id=member.guild.id, user_id=member.id)
 
     @commands.Cog.listener()
-    async def on_member_leave(self, member: Member) -> None:
+    async def on_member_remove(self, member: Member) -> None:
         await self.active_verification_messages_store.delete(guild_id=member.guild.id, user_id=member.id)
         # TODO Modify verification request button if verification is incomplete and user leaves.
         await self.remove_welcome_messages(guild=member.guild, user=member)
