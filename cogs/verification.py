@@ -9,7 +9,8 @@ from typing import Optional
 
 import aiosqlite
 import discord
-from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User, Guild
+from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User, Guild, \
+    Forbidden
 from discord.ext import commands, tasks
 from emoji import emojize
 
@@ -61,7 +62,8 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         # Start task loops.
         async def task():
             # TODO Refactor.
-            await asyncio.sleep(REMIND_TO_VERIFY_EVERY_N_SECS)
+            # TODO Uncomment.
+            # await asyncio.sleep(REMIND_TO_VERIFY_EVERY_N_SECS)
             self.give_button_to_unverified_users_without_active_verification_request.start()
 
         asyncio.create_task(task())
@@ -95,12 +97,15 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             has_active_request = member.id in user_ids_with_active_requests
             # In case member verified / requested verification in the meantime, we need to take this into account.
             if not await self.member_is_verified(guild, member) and not has_active_request:
-                if await self.active_verification_messages_store.num(
-                        guild_id=guild.id,
-                        user_id=member.id
-                ) > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
-                    await member.kick(reason='user did not verify')
-                    _logger.info(f'Kicked {tools.user_string(member)} because they did not verify')
+                num_reminders = await self.active_verification_messages_store.num(guild_id=member.guild.id,
+                                                                                  user_id=member.id)
+                if num_reminders > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
+                    try:
+                        await member.kick(reason='user did not verify')
+                        _logger.info(f'Kicked {tools.user_string(member)} because they did not verify')
+                    except Forbidden:
+                        _logger.warning(f'Could not kick {tools.user_string(member)} in guild with id '
+                                        f'{member.guild.id} because permissions are missing')
                 else:
                     await self.__create_verification_button(member)
                     # TODO Make this timer guild independent.
@@ -130,7 +135,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
 
         if None in (join_channel, join_message, welcome_channel, welcome_message, request_channel, role):
             _logger.warning('One of the necessary settings is not configured/not configured properly for the '
-                            'verification system to work!')
+                            'verification system to work!') # TODO Add the guild this problem occurred in
             success = False
         else:
             _logger.info(f'Making a verification button for {tools.user_string(user)}.')
