@@ -2,12 +2,9 @@ import asyncio
 import logging
 import random
 import re
-import time
 from datetime import datetime, timezone
-from threading import Thread
 from typing import Optional
 
-import aiosqlite
 import discord
 from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, SelectOption, Message, Embed, User, Guild, \
     Forbidden
@@ -135,7 +132,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
 
         if None in (join_channel, join_message, welcome_channel, welcome_message, request_channel, role):
             _logger.warning('One of the necessary settings is not configured/not configured properly for the '
-                            'verification system to work!') # TODO Add the guild this problem occurred in
+                            'verification system to work!')  # TODO Add the guild this problem occurred in
             success = False
         else:
             _logger.info(f'Making a verification button for {tools.user_string(user)}.')
