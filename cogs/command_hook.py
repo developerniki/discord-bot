@@ -38,7 +38,7 @@ class CommandHook(commands.Cog, name='Command Hook'):
                 return
 
             # Repeating the command prefix should not be an error.
-            command_prefix = await self.bot.core_store.get_command_prefix(ctx.guild.id)
+            command_prefix = await self.bot.command_prefix_store.get_command_prefix(ctx.guild.id)
             if re.match(f'{re.escape(command_prefix)}+', command):
                 return
 

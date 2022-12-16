@@ -46,7 +46,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             choose_basic_info_view = ChooseBasicInfoView(self)
             self.bot.add_view(choose_basic_info_view)
 
-            pending_verification_requests = await self.verification_request_store.get_pending()
+            pending_verification_requests = await self.verification_request_store.get_pending_verification_requests()
             for verification_request in pending_verification_requests:
                 verification_request_view = VerificationNotificationView(
                     verification_system=self,
@@ -77,7 +77,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     async def give_button_to_unverified_users_without_active_verification_request(self) -> None:
         _logger.info('Giving buttons to unverified users')
 
-        verification_requests = await self.verification_request_store.get_pending()
+        verification_requests = await self.verification_request_store.get_pending_verification_requests()
         user_ids_with_active_requests = {request.user_id for request in verification_requests}
         # TODO When user is verified or leaves or joins, clear ALL active requests.
 
@@ -94,8 +94,9 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             has_active_request = member.id in user_ids_with_active_requests
             # In case member verified / requested verification in the meantime, we need to take this into account.
             if not await self.member_is_verified(guild, member) and not has_active_request:
-                num_reminders = await self.active_verification_messages_store.num(guild_id=member.guild.id,
-                                                                                  user_id=member.id)
+                num_reminders = await self.active_verification_messages_store.get_num_active_verification_messages_by_user(
+                    guild_id=member.guild.id,
+                    user_id=member.id)
                 if num_reminders > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
                     try:
                         await member.kick(reason='user did not verify')
@@ -150,8 +151,9 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
             message = await join_channel.send(embed=embed, file=file, view=verification_request_view)
-            await self.active_verification_messages_store.create(message_id=message.id, guild_id=user.guild.id,
-                                                                 user_id=user.id, channel_id=join_channel.id)
+            await self.active_verification_messages_store.create_active_verification_message(
+                message_id=message.id, guild_id=user.guild.id, user_id=user.id, channel_id=join_channel.id
+            )
             success = True
         return success
 
@@ -164,12 +166,16 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await self.__create_verification_button(member)
             # To be safe, reset the stored active verification messages
             # (so the user is not accidentally kicked by reaching the threshold)
-            await self.active_verification_messages_store.delete(guild_id=member.guild.id, user_id=member.id)
+            await self.active_verification_messages_store.delete_active_verification_messages_by_user(
+                guild_id=member.guild.id, user_id=member.id
+            )
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: Member) -> None:
         _logger.info(f'{tools.user_string(member)} left the server!')
-        await self.active_verification_messages_store.delete(guild_id=member.guild.id, user_id=member.id)
+        await self.active_verification_messages_store.delete_active_verification_messages_by_user(
+            guild_id=member.guild.id, user_id=member.id
+        )
         await self.remove_welcome_messages(guild=member.guild, user=member)
         # TODO Modify verification request button if verification is incomplete and user leaves.
 
@@ -329,7 +335,9 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The adult role has been set to {role.mention}.', ephemeral=True)
 
     async def remove_welcome_messages(self, guild: Guild, user: User | Member):
-        messages = await self.active_verification_messages_store.get(guild_id=guild.id, user_id=user.id)
+        messages = await self.active_verification_messages_store.get_active_verification_messages_by_user(
+            guild_id=guild.id, user_id=user.id
+        )
         for message_ in messages:
             message_: ActiveVerificationMessage
             channel = self.bot.get_channel(message_.channel_id)
@@ -339,7 +347,8 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                     await message.delete()
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 pass
-        await self.active_verification_messages_store.delete(guild_id=guild.id, user_id=user.id)
+        await self.active_verification_messages_store.delete_active_verification_messages_by_user(guild_id=guild.id,
+                                                                                                  user_id=user.id)
 
 
 class MissingWelcomeMessageError(Exception):
@@ -499,7 +508,7 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         request_channel = interaction.guild.get_channel(request_channel_id)
 
         # Open a new user verification request in the database.
-        verification_request = await self.vs.verification_request_store.create(
+        verification_request = await self.vs.verification_request_store.create_verification_request(
             guild_id=interaction.guild_id,
             user_id=interaction.user.id,
             join_channel_id=self.welcome_message.channel.id,
@@ -609,7 +618,7 @@ class VerificationNotificationView(ui.View):
                     return
 
                 min_age = self.verification_request.age.replace('+', '')
-                min_age = re.match('(?P<min_age>\d+)(?P<max_age>-\d+)?', min_age).group('min_age')
+                min_age = re.match(r'(?P<min_age>\d+)(?P<max_age>-\d+)?', min_age).group('min_age')
                 min_age = int(min_age)
                 if min_age >= 18:
                     adult_role_id = await self.vs.verification_settings_store.get_adult_role_id(interaction.guild_id)
@@ -619,7 +628,7 @@ class VerificationNotificationView(ui.View):
                                                                   f'least {min_age}')
 
                 # Store the decision to verify the user in the database.
-                await self.vs.verification_request_store.close(self.verification_request, True)
+                await self.vs.verification_request_store.close_verification_request(self.verification_request, True)
 
                 # Welcome the user with additional information.
                 welcome_channel_id = await self.vs.verification_settings_store.get_welcome_channel_id(
@@ -737,7 +746,7 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
             await member.kick(reason=kick_reason)
 
             # Store the decision to not verify the user in the database.
-            await self.vs.verification_request_store.close(self.verification_request, False)
+            await self.vs.verification_request_store.close_verification_request(self.verification_request, False)
 
             # Remove the join message from the join channel. At this point, if it does not exist, we do not care.
             join_channel_id = await self.vs.verification_settings_store.get_join_channel_id(

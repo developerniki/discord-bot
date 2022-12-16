@@ -39,7 +39,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             ticket_request_modal = TicketRequestModal(self)
             self.bot.add_view(ticket_request_modal)
 
-            pending_ticket_requests = await self.ticket_request_store.get_pending()
+            pending_ticket_requests = await self.ticket_request_store.get_pending_ticket_requests()
             for ticket_request in pending_ticket_requests:
                 ticket_notification_view = TicketNotificationView(ticket_system=self, ticket_request=ticket_request)
                 self.bot.add_view(ticket_notification_view)
@@ -51,12 +51,12 @@ class TicketSystem(commands.Cog, name='Ticket System'):
 
     @tasks.loop(hours=1)
     async def close_due_ticket_request_channels(self):
-        channel_ids = await self.ticket_request_store.get_due_channel_ids(seconds=24 * 60 * 60)
+        channel_ids = await self.ticket_request_store.get_channel_ids_of_due_ticket_requests(seconds=24 * 60 * 60)
         for channel_id in channel_ids:
             channel = self.bot.get_channel(channel_id)
             if channel is not None:
                 await channel.delete(reason='rejected ticket request channel due for deletion')
-            await self.ticket_request_store.remove_channel(channel_id)
+            await self.ticket_request_store.remove_ticket_request_channel(channel_id)
 
     @commands.hybrid_group()
     @commands.has_guild_permissions(manage_channels=True)
@@ -78,7 +78,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         request_channel = ctx.guild.get_channel(request_channel_id)
 
         # Create a new ticket.
-        ticket = await self.ticket_store.create(
+        ticket = await self.ticket_store.create_ticket(
             guild_id=ctx.guild.id,
             user_id=member.id,
             reason=reason,
@@ -97,7 +97,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         )
 
         # Update the ticket with the channel id.
-        await self.ticket_store.set_channel(ticket=ticket, channel_id=channel.id)
+        await self.ticket_store.set_ticket_channel(ticket=ticket, channel_id=channel.id)
 
         # Describe why this channel was opened.
         member = ctx.guild.get_member(ticket.user_id)
@@ -155,10 +155,10 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             ]
 
             # Fetch the ticket before closing it.
-            ticket = await self.ticket_store.get_ticket_by_channel_id(ctx.channel.id)
+            ticket = await self.ticket_store.get_ticket_by_channel(ctx.channel.id)
 
             # Store the decision to close the ticket and the log in the database.
-            await self.ticket_store.close(ticket=ticket, log=json.dumps(log_dict))
+            await self.ticket_store.close_ticket(ticket=ticket, log=json.dumps(log_dict))
 
             # If a log channel exists, store the log there.
             ticket_log_channel_id = await self.ticket_settings_store.get_log_channel_id(ctx.guild.id)
@@ -205,7 +205,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             await ctx.channel.delete(reason='manually closing rejected ticket request channel')
 
             # Remove the channel from the database so it is marked as cleaned up.
-            await self.ticket_request_store.remove_channel(ctx.channel.id)
+            await self.ticket_request_store.remove_ticket_request_channel(ctx.channel.id)
         else:
             await ctx.send(f'{ctx.channel.mention} is not a ticket channel!', ephemeral=True)
 
@@ -373,14 +373,14 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         # TODO Deactivate ticket notification views.
         # TODO Store logs.
         # Close all open tickets and delete the corresponding channels.
-        channel_ids = await self.ticket_store.close_all_user(guild_id=ctx.guild.id, user_id=user.id)
+        channel_ids = await self.ticket_store.close_tickets_by_user(guild_id=ctx.guild.id, user_id=user.id)
         for channel_id in channel_ids:
             channel = channel_id and ctx.guild.get_channel(channel_id)
             if channel is not None:
                 await channel.delete(reason='closing ticket')
 
         # Reject all pending ticket requests.
-        await self.ticket_request_store.reject_all_user(guild_id=ctx.guild.id, user_id=user.id)
+        await self.ticket_request_store.reject_ticket_requests_by_user(guild_id=ctx.guild.id, user_id=user.id)
         await ctx.send(f'Closed open tickets and rejected pending ticket requests for {user.mention}.', ephemeral=True)
 
 
@@ -405,14 +405,15 @@ class TicketRequestView(ui.View):
                 ephemeral=True
             )
             return False
-        elif await self.ts.ticket_store.num_open(interaction.guild_id, interaction.user.id) > 0:
+        elif await self.ts.ticket_store.get_open_tickets_by_user(interaction.guild_id, interaction.user.id) > 0:
             _logger.info(f'{interaction.user} clicked the ticket request button but already has an open ticket.')
             await interaction.response.send_message(
                 'Could not open a ticket request as you already have an open ticket. Please try again later.',
                 ephemeral=True
             )
             return False
-        elif await self.ts.ticket_request_store.num_pending(interaction.guild_id, interaction.user.id) > 0:
+        elif await self.ts.ticket_request_store.get_num_pending_ticket_requests_by_user(interaction.guild_id,
+                                                                                        interaction.user.id) > 0:
             _logger.info(
                 f'{interaction.user} clicked the ticket request button but still has a pending ticket request.'
             )
@@ -468,13 +469,14 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
                 ephemeral=True
             )
             return False
-        elif await self.ts.ticket_store.num_open(interaction.guild_id, interaction.user.id) > 0:
+        elif await self.ts.ticket_store.get_open_tickets_by_user(interaction.guild_id, interaction.user.id) > 0:
             await interaction.response.send_message(
                 'Could not open a ticket request as you already have an open ticket. Please try again later.',
                 ephemeral=True
             )
             return False
-        elif await self.ts.ticket_request_store.num_pending(interaction.guild_id, interaction.user.id) > 0:
+        elif await self.ts.ticket_request_store.get_num_pending_ticket_requests_by_user(interaction.guild_id,
+                                                                                        interaction.user.id) > 0:
             await interaction.response.send_message(
                 'Could not open a ticket request as you already have a pending ticket request. Please try again later.',
                 ephemeral=True
@@ -497,7 +499,7 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
         _logger.info(f'{interaction.user} submitted a ticket request. The reason is: {self.reason_txt_input.value}')
 
         # Open a new ticket request in the database.
-        ticket_request = await self.ts.ticket_request_store.create(
+        ticket_request = await self.ts.ticket_request_store.create_ticket_request(
             guild_id=interaction.guild_id,
             user_id=interaction.user.id,
             reason=self.reason_txt_input.value,
@@ -563,7 +565,7 @@ class TicketNotificationView(ui.View):
                 return
 
             # Create the ticket.
-            ticket = await self.ts.ticket_store.create(
+            ticket = await self.ts.ticket_store.create_ticket(
                 self.ticket_request.guild_id,
                 self.ticket_request.user_id,
                 self.ticket_request.reason
@@ -583,7 +585,7 @@ class TicketNotificationView(ui.View):
             )
 
             # Update the ticket with the channel id.
-            await self.ts.ticket_store.set_channel(ticket=ticket, channel_id=channel.id)
+            await self.ts.ticket_store.set_ticket_channel(ticket=ticket, channel_id=channel.id)
 
             # Describe why this channel was opened.
             description = f'This ticket has been created at the request of {ticket_member.mention}. '
@@ -601,7 +603,7 @@ class TicketNotificationView(ui.View):
                          f'with reason {ticket.reason}.')
 
             # Store the decision to accept the ticket in the database.
-            await self.ts.ticket_request_store.accept(ticket_request=self.ticket_request, ticket=ticket)
+            await self.ts.ticket_request_store.accept_ticket_request(ticket_request=self.ticket_request, ticket=ticket)
 
             # Stop listening to the view and deactivate it.
             self.stop()
@@ -648,10 +650,11 @@ class TicketNotificationView(ui.View):
             )
 
             # Store the decision to reject the ticket in the database.
-            await self.ts.ticket_request_store.reject(self.ticket_request)
+            await self.ts.ticket_request_store.reject_ticket_request(self.ticket_request)
 
             # Update the ticket request with the channel id.
-            await self.ts.ticket_request_store.set_channel(ticket_request=self.ticket_request, channel_id=channel.id)
+            await self.ts.ticket_request_store.set_ticket_channel(ticket_request=self.ticket_request,
+                                                                  channel_id=channel.id)
 
             # Describe why this channel was opened.
             description = f'The ticket created at the request of {ticket_member.mention} has been ' \
@@ -674,7 +677,7 @@ class TicketNotificationView(ui.View):
                          f'with reason {self.ticket_request.reason}.')
 
             # Store the decision to reject the ticket request in the database and apply a cooldown to the user.
-            await self.ts.ticket_request_store.reject(ticket_request=self.ticket_request)
+            await self.ts.ticket_request_store.reject_ticket_request(ticket_request=self.ticket_request)
             cooldown_in_secs = await self.ts.ticket_settings_store.get_guild_cooldown(guild_id=interaction.guild_id)
             await self.ts.ticket_cooldown_store.set_user_cooldown(
                 guild_id=interaction.guild_id,

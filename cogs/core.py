@@ -20,10 +20,10 @@ class Core(commands.Cog, name='Core'):
     async def prefix(self, ctx: commands.Context, prefix: Optional[str]) -> None:
         """Get or set the command prefix, depending on whether `prefix` is present."""
         if prefix is None:
-            prefix = await self.bot.core_store.get_command_prefix(ctx.guild.id)
+            prefix = await self.bot.command_prefix_store.get_command_prefix(ctx.guild.id)
             await ctx.send(f"The server's command prefix is `{prefix}`.", ephemeral=True)
         else:
-            await self.bot.core_store.set_command_prefix(guild_id=ctx.guild.id, command_prefix=prefix)
+            await self.bot.command_prefix_store.set_command_prefix(guild_id=ctx.guild.id, command_prefix=prefix)
             await ctx.send(f'Server command prefix set to `{prefix}`.', ephemeral=True)
 
     @commands.hybrid_command()

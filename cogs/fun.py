@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import emoji
 import toml
-from discord import Message, User
+from discord import User
 from discord.ext import commands
 from emoji import demojize, emojize
 
@@ -33,9 +33,9 @@ class Fun(commands.Cog, name='Fun'):
                 self.pattern_to_action = [
                     PatternToAction(
                         pattern,
-                        actions.get('reactions', []),
-                        actions.get('responses', []),
-                        actions.get('chance', 1.0)
+                        actions.get_active_verification_messages_by_user('reactions', []),
+                        actions.get_active_verification_messages_by_user('responses', []),
+                        actions.get_active_verification_messages_by_user('chance', 1.0)
                     )
                     for pattern, actions in config['patterns'].items()
                 ]

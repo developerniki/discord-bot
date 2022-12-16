@@ -3,7 +3,7 @@ import logging
 import discord
 from discord.ext import commands
 
-from database import database, CoreStore
+from database import database, CommandPrefixStore
 from .config import Config
 
 _logger = logging.getLogger(__name__)
@@ -19,12 +19,12 @@ class SlimBot(commands.Bot):
         intents.message_content = True
         intents.members = True
 
-        self.core_store = CoreStore(self.config.db_file)
+        self.command_prefix_store = CommandPrefixStore(self.config.db_file)
 
         async def command_prefix(bot: commands.Bot, message: discord.Message):
             prefixes = [bot.user.name + ' ']
             if message.guild is not None:
-                guild_prefix = await self.core_store.get_command_prefix(message.guild.id)
+                guild_prefix = await self.command_prefix_store.get_command_prefix(message.guild.id)
                 prefixes.append(guild_prefix)
 
             # Allow case-insensitive prefix.

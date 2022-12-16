@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Any, Dict
+from typing import Type, Tuple, List, TypeVar
 
 import aiosqlite
+
+T = TypeVar('T')
 
 MIGRATIONS_DIR = Path(__file__).parent / 'migrations'
 MIGRATIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -20,50 +23,99 @@ async def do_migrations(db_file: Path, defaults: Dict[str, Any]) -> None:
         await con.commit()
 
 
+class InvalidQueryTypeError(Exception):
+    """Raised when an invalid query type is encountered."""
+    pass
+
+
 class BaseStore:
     """The base storage class which is inherited by all classes that handle database interactions."""
 
     def __init__(self, db_file: Path):
         self.db_file = db_file
 
+    async def _execute_select(self, query: str, params: Tuple[int | str, ...] = None, object_type: Type[T] = None,
+                              single_row: bool = False) -> List[T] | T:
+        async with aiosqlite.connect(self.db_file) as con:
+            con.row_factory = aiosqlite.Row
+            cur = await con.cur()
+            await cur.execute(query, params)
+            if single_row:
+                row = await cur.fetchone()
+                if object_type is None:
+                    return row and row[0]
+                elif object_type in (str, int, bool):
+                    return row and object_type(row[0])
+                else:
+                    return object_type(**row)
+            else:
+                rows = await cur.fetchall()
+                if object_type is None:
+                    return [row[0] for row in rows]
+                elif object_type in (str, int, bool):
+                    return [object_type(row[0]) for row in rows]
+                else:
+                    return [object_type(**row) for row in rows]
+
+    async def _execute_modifying_query(self, query: str, params: Tuple[int | str, ...] = None) -> int:
+        async with aiosqlite.connect(self.db_file) as connection:
+            cur = await connection.cur()
+            await cur.execute(query, params)
+            return cur.rowcount, cur.lastrowid
+
+    async def execute_query(
+            self,
+            query: str,
+            params: Tuple[int | str, ...] = None,
+            obj_type: Type[T] = None,
+            single_row: bool = False
+    ) -> List[T] | T | int:
+        """Execute a database query.
+
+        Args:
+            query: The database query to be executed.
+            params: A tuple of parameters for the query.
+            obj_type: The type of object to map the query results to (optional). If this is not specified or `str` or `int` or `bool`, return only a single element per row.
+            single_row: If `True`, the SELECT query will return a single row. If False, it will return a list of rows.
+
+        Returns:
+            The result of the SELECT statement or a tuple containing the number of rows affected and the last row id if the query is an INSERT, UPDATE, or DELETE query.
+
+        Raises:
+            InvalidQueryTypeError: If the query is not a SELECT, INSERT, UPDATE, or DELETE query.
+        """
+        if query.upper().startswith('SELECT'):
+            return await self._execute_select(query, params, obj_type, single_row)
+        elif query.upper().startswith(('INSERT', 'UPDATE', 'DELETE')):
+            return await self._execute_modifying_query(query, params)
+        else:
+            raise InvalidQueryTypeError('Invalid query type.')
+
+
+class SettingStore(BaseStore):
+    """This storage class is inherited by all classes that handle settings-related database interactions."""
+
+    def __init__(self, db_file: Path):
+        super().__init__(db_file)
+
     async def get_default_setting(self, key: Any) -> Any:
         """Return the default setting for `key`."""
-        async with aiosqlite.connect(self.db_file) as con:
-            statement = 'SELECT v FROM DefaultSettings WHERE k=?'
-            cur = await con.execute(statement, (key,))
-            res = await cur.fetchone()
-            res = res and res[0]
-            return res
+        query = 'SELECT v FROM DefaultSettings WHERE k=?'
+        params = (key,)
+        return await self.execute_query(query, params, single_row=True)
 
     async def get_setting(self, guild_id: int, key: Any) -> Any:
         """Return the server specific setting for `key` and the default setting for `key` if none exists."""
-        async with aiosqlite.connect(self.db_file) as con:
-            statement = """SELECT IFNULL(S.v, D.v)
-                        FROM (SELECT * FROM Settings WHERE guild_id = ?) S
-                        FULL JOIN DefaultSettings D ON S.k = D.k
-                        WHERE ? IN (S.k, D.k)
-                        """
-            cur = await con.execute(statement, (guild_id, key))
-            res = await cur.fetchone()
-            res = res and res[0]
-            return res
+        query = """SELECT IFNULL(S.v, D.v)
+                   FROM (SELECT * FROM Settings WHERE guild_id = ?) S
+                   FULL JOIN DefaultSettings D ON S.k = D.k
+                   WHERE ? IN (S.k, D.k)
+                   """
+        params = (guild_id, key)
+        return await self.execute_query(query, params, single_row=True)
 
     async def set_setting(self, guild_id: int, key: Any, value: Any) -> None:
         """Set the server-specific setting for `key`."""
-        async with aiosqlite.connect(self.db_file) as con:
-            statement = 'INSERT OR REPLACE INTO Settings(guild_id, k, v) VALUES (?, ?, ?)'
-            await con.execute(statement, (guild_id, key, value))
-            await con.commit()
-
-
-class CoreStore(BaseStore):
-    """The storage class that handles database interaction relevant to the core functions of the bot."""
-
-    def __init__(self, db_file: Path) -> None:
-        super().__init__(db_file)
-
-    async def get_command_prefix(self, guild_id: int) -> str:
-        return await self.get_setting(guild_id, 'command_prefix')
-
-    async def set_command_prefix(self, guild_id: int, command_prefix: str) -> None:
-        await self.set_setting(guild_id, 'command_prefix', command_prefix)
+        query = 'INSERT OR REPLACE INTO Settings(guild_id, k, v) VALUES (?, ?, ?)'
+        params = (guild_id, key, value)
+        await self.execute_query(query, params)
