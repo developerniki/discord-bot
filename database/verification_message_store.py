@@ -8,8 +8,8 @@ from slimbot import tools
 class ActiveVerificationMessage:
     """The in-memory representation of an active verification message in the database."""
 
-    def __init__(self, message_id: int, guild_id: int, user_id: int, channel_id: int, created_at: int) -> None:
-        self.id = message_id
+    def __init__(self, id: int, guild_id: int, user_id: int, channel_id: int, created_at: int) -> None:
+        self.id = id
         self.guild_id = guild_id
         self.user_id = user_id
         self.channel_id = channel_id
@@ -31,7 +31,7 @@ class ActiveVerificationMessageStore(BaseStore):
         created_at = tools.unix_seconds_from_discord_snowflake_id(message_id)
         params = (message_id, guild_id, user_id, channel_id, created_at)
         await self.execute_query(query, params)
-        active_verification_message = ActiveVerificationMessage(message_id=message_id, guild_id=guild_id,
+        active_verification_message = ActiveVerificationMessage(id=message_id, guild_id=guild_id,
                                                                 user_id=user_id, channel_id=channel_id,
                                                                 created_at=created_at)
         return active_verification_message

@@ -38,7 +38,7 @@ class BaseStore:
                               single_row: bool = False) -> List[T] | T:
         async with aiosqlite.connect(self.db_file) as con:
             con.row_factory = aiosqlite.Row
-            cur = await con.cur()
+            cur = await con.cursor()
             await cur.execute(query, params)
             if single_row:
                 row = await cur.fetchone()
@@ -53,14 +53,15 @@ class BaseStore:
                 if object_type is None:
                     return [row[0] for row in rows]
                 elif object_type in (str, int, bool):
-                    return [object_type(row[0]) for row in rows]
+                    return [object_type(row[0]) if row[0] is not None else None for row in rows]
                 else:
                     return [object_type(**row) for row in rows]
 
     async def _execute_modifying_query(self, query: str, params: Tuple[int | str, ...] = None) -> int:
-        async with aiosqlite.connect(self.db_file) as connection:
-            cur = await connection.cur()
+        async with aiosqlite.connect(self.db_file) as con:
+            cur = await con.cursor()
             await cur.execute(query, params)
+            await con.commit()
             return cur.rowcount, cur.lastrowid
 
     async def execute_query(
@@ -92,7 +93,7 @@ class BaseStore:
             raise InvalidQueryTypeError('Invalid query type.')
 
 
-class SettingStore(BaseStore):
+class SettingsStore(BaseStore):
     """This storage class is inherited by all classes that handle settings-related database interactions."""
 
     def __init__(self, db_file: Path):

@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from database import SettingStore
+from database import SettingsStore
 
 
-class VerificationSettingStore(SettingStore):
+class VerificationSettingsStore(SettingsStore):
     """Handles database access with the `Settings` table for settings related to the verification system."""
 
     def __init__(self, db_file: Path) -> None:

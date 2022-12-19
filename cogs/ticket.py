@@ -207,7 +207,9 @@ class TicketSystem(commands.Cog, name='Ticket System'):
             # Remove the channel from the database so it is marked as cleaned up.
             await self.ticket_request_store.remove_ticket_request_channel(ctx.channel.id)
         else:
-            await ctx.send(f'{ctx.channel.mention} is not a ticket channel!', ephemeral=True)
+            print(await self.ticket_store.is_ticket_channel(ctx.channel.id))
+            print(await self.ticket_request_store.is_ticket_request_channel(ctx.channel.id))
+            await ctx.send(f'{ctx.channel.mention} is not a ticket or request denial channel channel!', ephemeral=True)
 
     @ticket.command()
     @commands.has_guild_permissions(manage_channels=True)
@@ -405,7 +407,7 @@ class TicketRequestView(ui.View):
                 ephemeral=True
             )
             return False
-        elif await self.ts.ticket_store.get_open_tickets_by_user(interaction.guild_id, interaction.user.id) > 0:
+        elif await self.ts.ticket_store.get_num_open_tickets_by_user(interaction.guild_id, interaction.user.id) > 0:
             _logger.info(f'{interaction.user} clicked the ticket request button but already has an open ticket.')
             await interaction.response.send_message(
                 'Could not open a ticket request as you already have an open ticket. Please try again later.',
@@ -469,7 +471,7 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
                 ephemeral=True
             )
             return False
-        elif await self.ts.ticket_store.get_open_tickets_by_user(interaction.guild_id, interaction.user.id) > 0:
+        elif await self.ts.ticket_store.get_num_open_tickets_by_user(interaction.guild_id, interaction.user.id) > 0:
             await interaction.response.send_message(
                 'Could not open a ticket request as you already have an open ticket. Please try again later.',
                 ephemeral=True

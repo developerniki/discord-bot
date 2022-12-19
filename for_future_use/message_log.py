@@ -116,12 +116,12 @@ for m in messages:
 
 
             # Retrieve the relevant ticket and channel history.
-            ticket = await self.ticket_store.get_ticket_by_channel_id(ctx.channel.id)
+            ticket = await self.ticket_store.get_ticket_by_channel(ctx.channel.id)
             messages: List[Message] = [message async for message in ctx.channel.history(limit=None, oldest_first=True)]
 
             # Close the ticket and store the decision to close the ticket and the log in the database.
             log_as_dict = self.__log_body_as_dict_list(messages, attachment_filenames, attachment_contents)
-            await self.ticket_store.close(ticket=ticket, log=json.dumps(log_as_dict))
+            await self.ticket_store.close_ticket(ticket=ticket, log=json.dumps(log_as_dict))
 
             # If a log channel exists, store the log there.
             ticket_log_channel_id = await self.ticket_settings_store.get_log_channel_id(ctx.guild.id)

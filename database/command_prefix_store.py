@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from database import SettingStore
+from .database import SettingsStore
 
 
-class CommandPrefixStore(SettingStore):
+class CommandPrefixStore(SettingsStore):
     """The storage class that handles database interaction relevant to the core functions of the bot."""
 
     def __init__(self, db_file: Path) -> None:

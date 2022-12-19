@@ -11,7 +11,7 @@ from discord import ui, TextChannel, Member, ButtonStyle, Interaction, Role, Sel
 from discord.ext import commands, tasks
 from emoji import emojize
 
-from database import VerificationRequest, VerificationSettingStore, VerificationRequestStore, \
+from database import VerificationRequest, VerificationSettingsStore, VerificationRequestStore, \
     ActiveVerificationMessageStore, ActiveVerificationMessage
 from slimbot import SlimBot, tools
 
@@ -30,7 +30,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         self.bot = bot
         self._views_added = False
 
-        self.verification_settings_store = VerificationSettingStore(self.bot.config.db_file)
+        self.verification_settings_store = VerificationSettingsStore(self.bot.config.db_file)
         self.verification_request_store = VerificationRequestStore(self.bot.config.db_file)
         self.active_verification_messages_store = ActiveVerificationMessageStore(self.bot.config.db_file)
         self._views_added = False
@@ -743,7 +743,10 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
         else:
             _logger.info(f"{tools.user_string(interaction.user)} rejected {tools.user_string(member)}'s verification "
                          f"request for {kick_reason=}.")
-            await member.kick(reason=kick_reason)
+            try:
+                await member.kick(reason=kick_reason)
+            except Forbidden:
+                _logger.warning(f"Couldn't kick {tools.user_string(member)}")
 
             # Store the decision to not verify the user in the database.
             await self.vs.verification_request_store.close_verification_request(self.verification_request, False)

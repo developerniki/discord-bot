@@ -33,9 +33,9 @@ class Fun(commands.Cog, name='Fun'):
                 self.pattern_to_action = [
                     PatternToAction(
                         pattern,
-                        actions.get_active_verification_messages_by_user('reactions', []),
-                        actions.get_active_verification_messages_by_user('responses', []),
-                        actions.get_active_verification_messages_by_user('chance', 1.0)
+                        actions.get('reactions', []),
+                        actions.get('responses', []),
+                        actions.get('chance', 1.0)
                     )
                     for pattern, actions in config['patterns'].items()
                 ]
@@ -74,6 +74,18 @@ class Fun(commands.Cog, name='Fun'):
         else:
             await ctx.send(f'Let me give you a hug, {user.mention}! {hearts}')
         await ctx.channel.send(random.choice(self.hug_links))
+
+    @commands.hybrid_command()
+    async def bonk(self, ctx: commands.Context, user: User):
+        """Bonk `user`."""
+        angry = emojize(':angry_face:')
+        bonk_link = 'https://tenor.com/view/bonk-v%C3%A0o-m%E1%BA%B7t-c%C3%A1i-c%C3%A1m-bonk-anime-bonk-meme-bonk-dog-gif-26069974'
+
+        if user == self.bot.user:
+            await ctx.send(f'Bonk myself? Let me bonk you instead, {ctx.author.mention}! {angry}')
+        else:
+            await ctx.send(f'No horni, {user.mention}! {angry}')
+        await ctx.channel.send(bonk_link)
 
     @commands.hybrid_command()
     @commands.cooldown(1, 10, commands.BucketType.user)

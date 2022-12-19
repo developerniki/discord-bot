@@ -2,17 +2,18 @@ import time
 from pathlib import Path
 from typing import Optional, List
 
-from database import BaseStore, Ticket
+from .database import BaseStore
+from .ticket_store import Ticket
 
 
 class TicketRequest:
     """The in-memory representation of a ticket request in the database."""
 
-    def __init__(self, ticket_request_id: int, guild_id: int, user_id: int, ticket_id: Optional[int],
+    def __init__(self, id: int, guild_id: int, user_id: int, ticket_id: Optional[int],
                  reason: Optional[str], status: str, channel_id: Optional[int], created_at: Optional[int],
                  closed_at: Optional[int]) -> None:
         assert status in ('pending', 'accepted', 'rejected')
-        self.id = ticket_request_id
+        self.id = id
         self.guild_id = guild_id
         self.user_id = user_id
         self.ticket_id = ticket_id
@@ -38,7 +39,7 @@ class TicketRequestStore(BaseStore):
         created_at = round(time.time())
         params = (guild_id, user_id, reason, created_at)
         _rowcount, lastrowid = await self.execute_query(query, params)
-        ticket_request = TicketRequest(ticket_request_id=lastrowid, guild_id=guild_id, user_id=user_id, ticket_id=None,
+        ticket_request = TicketRequest(id=lastrowid, guild_id=guild_id, user_id=user_id, ticket_id=None,
                                        reason=reason, status='pending', channel_id=None, created_at=created_at,
                                        closed_at=None)
         return ticket_request
@@ -93,7 +94,7 @@ class TicketRequestStore(BaseStore):
     async def set_ticket_channel(self, ticket_request: TicketRequest, channel_id: Optional[int]) -> None:
         query = 'UPDATE TicketRequests SET channel_id=? WHERE id=?'
         params = (channel_id, ticket_request.id)
-        self.execute_query(query, params)
+        await self.execute_query(query, params)
         ticket_request.channel_id = channel_id
 
     async def delete_ticket_request(self, ticket_request: TicketRequest) -> None:
@@ -105,12 +106,12 @@ class TicketRequestStore(BaseStore):
         query = 'UPDATE TicketRequests SET ticket_id=?, status="accepted", closed_at=? WHERE id=?'
         closed_at = round(time.time())
         params = (ticket.id, closed_at, ticket_request.id)
-        self.execute_query(query, params)
+        await self.execute_query(query, params)
         ticket_request.status = 'accepted'
 
     async def reject_ticket_request(self, ticket_request: TicketRequest) -> None:
         query = 'UPDATE TicketRequests SET status="rejected", closed_at=? WHERE id=?'
         closed_at = round(time.time())
         params = (closed_at, ticket_request.id)
-        self.execute_query(query, params)
+        await self.execute_query(query, params)
         ticket_request.status = 'rejected'

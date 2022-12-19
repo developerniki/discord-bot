@@ -9,10 +9,10 @@ from slimbot import tools
 class VerificationRequest:
     """The in-memory representation of a verification request in the database."""
 
-    def __init__(self, user_verification_id: int, guild_id: int, user_id: int, join_channel_id: int,
+    def __init__(self, id: int, guild_id: int, user_id: int, join_channel_id: int,
                  join_message_id: int, verified: bool, joined_at: int, closed_at: Optional[int], age: str,
                  gender: str) -> None:
-        self.id = user_verification_id
+        self.id = id
         self.guild_id = guild_id
         self.user_id = user_id
         self.join_channel_id = join_channel_id
@@ -41,7 +41,7 @@ class VerificationRequestStore(BaseStore):
         joined_at = tools.unix_seconds_from_discord_snowflake_id(join_message_id)
         params = (guild_id, user_id, join_channel_id, join_message_id, joined_at, age, gender)
         _num_rows, lastrowid = await self.execute_query(query, params)
-        verification_request = VerificationRequest(user_verification_id=lastrowid, guild_id=guild_id, user_id=user_id,
+        verification_request = VerificationRequest(id=lastrowid, guild_id=guild_id, user_id=user_id,
                                                    join_channel_id=join_channel_id, join_message_id=join_message_id,
                                                    verified=False, joined_at=joined_at, closed_at=None, age=age,
                                                    gender=gender)
@@ -60,5 +60,5 @@ class VerificationRequestStore(BaseStore):
         query = 'UPDATE VerificationRequests SET verified=?, closed_at=? WHERE id=?'
         closed_at = round(time.time())
         params = (verified, closed_at, verification_request.id)
-        self.execute_query(query, params)
+        await self.execute_query(query, params)
         verification_request.verified = verified
