@@ -460,13 +460,14 @@ class ChooseBasicInfoView(ui.View):
 
         if not gender or not age_range:
             await interaction.response.send_message(content='Please fill out both fields!', ephemeral=True)
-
-        assert age_range in self.age_ranges
-        assert gender in self.genders
-        choose_advanced_info_modal = ChooseAdvancedInfoModal(verification_system=self.vs, age_range=age_range,
-                                                             gender=gender, welcome_message=join_message)
-        await interaction.response.send_modal(choose_advanced_info_modal)
-        await interaction.edit_original_response(content='To retry, click the `Verify me!` button again.', view=None)
+        else:
+            assert age_range in self.age_ranges
+            assert gender in self.genders
+            choose_advanced_info_modal = ChooseAdvancedInfoModal(verification_system=self.vs, age_range=age_range,
+                                                                 gender=gender, welcome_message=join_message)
+            await interaction.response.send_modal(choose_advanced_info_modal)
+            await interaction.edit_original_response(content='To retry, click the `Verify me!` button again.',
+                                                     view=None)
 
 
 class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
