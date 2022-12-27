@@ -346,10 +346,12 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                 message = await channel.fetch_message(message_.id)
                 if message is not None:
                     await message.delete()
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                pass
-        await self.active_ver_msg_store.delete_active_verification_messages_by_user(guild_id=guild.id,
-                                                                                    user_id=user.id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                _logger.error(
+                    f'Could not delete active verification message with {guild.id=}, {user.id=} and {message.id=} '
+                    f'and got error {e}.'
+                )
+        await self.active_ver_msg_store.delete_active_verification_messages_by_user(guild_id=guild.id, user_id=user.id)
 
 
 class MissingWelcomeMessageError(Exception):
