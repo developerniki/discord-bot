@@ -57,7 +57,7 @@ class BaseStore:
                 else:
                     return [object_type(**row) for row in rows]
 
-    async def _execute_modifying_query(self, query: str, params: Tuple[int | str, ...] = None) -> int:
+    async def _execute_modifying_query(self, query: str, params: Tuple[int | str, ...] = None) -> Tuple[int, int]:
         async with aiosqlite.connect(self.db_file) as con:
             cur = await con.cursor()
             await cur.execute(query, params)
