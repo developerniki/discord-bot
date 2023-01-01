@@ -64,3 +64,11 @@ CREATE TABLE IF NOT EXISTS ActiveVerificationMessages(
     channel_id BIGINT NOT NULL,
     created_at BIGINT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS VerificationRuleMessages(
+    id BIGINT PRIMARY KEY,
+    guild_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    channel_id BIGINT NOT NULL,
+    created_at BIGINT NOT NULL
+);

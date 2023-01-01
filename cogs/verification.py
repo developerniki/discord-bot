@@ -12,7 +12,7 @@ from discord.ext import commands, tasks
 from emoji import emojize
 
 from database import VerificationRequest, VerificationSettingsStore, VerificationRequestStore, \
-    ActiveVerificationMessageStore, ActiveVerificationMessage
+    ActiveVerificationMessageStore, ActiveVerificationMessage, VerificationRuleMessageStore, VerificationRuleMessage
 from slimbot import SlimBot, tools
 
 _logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         self.verification_settings_store = VerificationSettingsStore(self.bot.config.db_file)
         self.verification_request_store = VerificationRequestStore(self.bot.config.db_file)
         self.active_ver_msg_store = ActiveVerificationMessageStore(self.bot.config.db_file)
+        self.rule_msg_store = VerificationRuleMessageStore(self.bot.config.db_file)
         self._views_added = False
 
     @commands.Cog.listener()
@@ -91,10 +92,15 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         for member in unverified_members:
             has_active_request = member.id in user_ids_with_active_requests
             # In case member verified / requested verification in the meantime, the member won't receive another button.
-            if not await self.member_is_verified(guild, member) and not has_active_request:
+            if not await self.member_is_verified(member.guild, member) and not has_active_request:
                 num_reminders = await self.active_ver_msg_store.get_num_active_verification_messages_by_user(
                     guild_id=member.guild.id, user_id=member.id
                 )
+                # If the user received 0 verification reminders, use the rule acceptance reminders to determine whether the user should be kicked.
+                if num_reminders == 0:
+                    num_reminders = await self.rule_msg_store.get_num_rule_messages_by_user(
+                        guild_id=member.guild.id, user_id=member.id
+                    )
                 if num_reminders > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
                     try:
                         await member.kick(reason='user did not verify')
@@ -103,12 +109,14 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                         _logger.warning(f'Could not kick {tools.user_string(member)} in guild with id '
                                         f'{member.guild.id} because permissions are missing')
                 else:
-                    # TODO If `member.pending` (they didn't complete the rule verification), handle differently.
-                    await self._create_verification_button(member)
+                    if member.pending:
+                        await self._create_rule_acceptance_message(member)
+                    else:
+                        await self._create_verification_message(member)
             # TODO Make this timer guild dependent.
             await asyncio.sleep(N_SECS_BETWEEN_VERIFICATION_REMINDERS)
 
-    async def _create_verification_button(self, user: User | Member) -> bool:
+    async def _create_verification_message(self, user: User | Member) -> bool:
         """Creates the button to start the verification process for `user`.
 
         Returns:
@@ -156,23 +164,63 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             success = True
         return success
 
+    async def _remove_active_verification_messages(self, guild: Guild, user: User | Member) -> None:
+        messages = await self.active_ver_msg_store.get_active_verification_messages_by_user(
+            guild_id=guild.id, user_id=user.id
+        )
+        for message_ in messages:
+            message_: ActiveVerificationMessage
+            channel = self.bot.get_channel(message_.channel_id)
+            try:
+                message = await channel.fetch_message(message_.id)
+                await message.delete()
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                _logger.error(
+                    f'Could not delete active verification message with {guild.id=}, {user.id=} and {message_.id=} '
+                    f'and got error {e}.'
+                )
+        await self.active_ver_msg_store.delete_active_verification_messages_by_user(guild_id=guild.id, user_id=user.id)
+
+    async def _create_rule_acceptance_message(self, user: User | Member) -> None:
+        join_channel_id = await self.verification_settings_store.get_join_channel_id(user.guild.id)
+        join_channel = join_channel_id and user.guild.get_channel(join_channel_id)
+        if join_channel:
+            message = await join_channel.send(
+                f'Welcome, {user.mention}! Please accept the rules to get a verification button.'
+            )
+            await self.rule_msg_store.create_rule_message(
+                message_id=message.id, guild_id=user.guild.id, user_id=user.id, channel_id=join_channel.id
+            )
+
+    async def _remove_rule_acceptance_messages(self, guild: Guild, user: User | Member) -> None:
+        messages = await self.rule_msg_store.get_rule_messages_by_user(guild_id=guild.id, user_id=user.id)
+        for message_ in messages:
+            message_: VerificationRuleMessage
+            channel = self.bot.get_channel(message_.channel_id)
+            try:
+                message = await channel.fetch_message(message_.id)
+                await message.delete()
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                _logger.error(
+                    f'Could not delete rule message with {guild.id=}, {user.id=} and {message_.id=} and got error {e}.'
+                )
+        await self.rule_msg_store.delete_rule_messages_by_user(guild_id=guild.id, user_id=user.id)
+
     @commands.Cog.listener()
     async def on_member_join(self, member: Member) -> None:
         _logger.info(f'{tools.user_string(member)} joined the server!')
         if not member.bot:
             # To be safe, remove the active verification messages
             # (so the user is not accidentally kicked by reaching the threshold).
-            await self.remove_active_verification_messages(guild=member.guild, user=member)
+            await self._remove_active_verification_messages(guild=member.guild, user=member)
             if not member.pending:
-                await self._create_verification_button(member)
+                await self._create_verification_message(member)
             else:
                 # Tell the member to accept the rules by sending a message in the join channel.
                 join_channel_id = await self.verification_settings_store.get_join_channel_id(member.guild.id)
                 join_channel = join_channel_id and member.guild.get_channel(join_channel_id)
                 if join_channel:
-                    await join_channel.send(
-                        f'Welcome, {member.mention}! Please accept the rules to get a verification button!'
-                    )
+                    await self._create_rule_acceptance_message(member)
 
     @commands.Cog.listener()
     async def on_member_update(self, before: Member, after: Member) -> None:
@@ -181,12 +229,13 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             if after.bot:
                 _logger.info(f'{tools.user_string(after)} is a bot, so not making a verification button.')
             else:
-                await self._create_verification_button(after)
+                await self._remove_rule_acceptance_messages(guild=after.guild, user=after)
+                await self._create_verification_message(after)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: Member) -> None:
         _logger.info(f'{tools.user_string(member)} left the server!')
-        await self.remove_active_verification_messages(guild=member.guild, user=member)
+        await self._remove_active_verification_messages(guild=member.guild, user=member)
         # TODO Modify verification request button if verification is incomplete and user leaves.
 
     @commands.hybrid_group()
@@ -198,7 +247,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     @commands.has_guild_permissions(manage_channels=True)
     async def button(self, ctx: commands.Context, user: User):
         """Create a verification button for `user`."""
-        success = await self._create_verification_button(user)
+        success = await self._create_verification_message(user)
         if not success:
             await ctx.send('Cannot create a button. First, configure the necessary settings using the '
                            '`/verification setup` command.', ephemeral=True)
@@ -343,23 +392,6 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         else:
             await self.verification_settings_store.set_adult_role_id(guild_id=ctx.guild.id, role_id=role.id)
             await ctx.send(f'The adult role has been set to {role.mention}.', ephemeral=True)
-
-    async def remove_active_verification_messages(self, guild: Guild, user: User | Member):
-        messages = await self.active_ver_msg_store.get_active_verification_messages_by_user(
-            guild_id=guild.id, user_id=user.id
-        )
-        for message_ in messages:
-            message_: ActiveVerificationMessage
-            channel = self.bot.get_channel(message_.channel_id)
-            try:
-                message = await channel.fetch_message(message_.id)
-                await message.delete()
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
-                _logger.error(
-                    f'Could not delete active verification message with {guild.id=}, {user.id=} and {message_.id=} '
-                    f'and got error {e}.'
-                )
-        await self.active_ver_msg_store.delete_active_verification_messages_by_user(guild_id=guild.id, user_id=user.id)
 
 
 class MissingWelcomeMessageError(Exception):
@@ -663,7 +695,7 @@ class VerificationNotificationView(ui.View):
                 await welcome_channel.send(content=description)
 
             # Remove all welcome messages.
-            await self.vs.remove_active_verification_messages(guild=interaction.guild, user=member)
+            await self.vs._remove_active_verification_messages(guild=interaction.guild, user=member)
 
             # Stop listening to the view and deactivate it.
             self.stop()
@@ -770,7 +802,7 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
                     pass
 
             # Remove other welcome messages.
-            await self.vs.remove_active_verification_messages(guild=interaction.guild, user=member)
+            await self.vs._remove_active_verification_messages(guild=interaction.guild, user=member)
 
         # Modify verification notification message.
         # The lock and `is_finished()` call ensure that the view is only responded to once.

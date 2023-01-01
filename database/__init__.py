@@ -6,4 +6,5 @@ from .ticket_settings_store import TicketSettingsStore
 from .ticket_store import Ticket, TicketStore
 from .verification_message_store import ActiveVerificationMessage, ActiveVerificationMessageStore
 from .verification_request_store import VerificationRequest, VerificationRequestStore
+from .verification_rule_message_store import VerificationRuleMessage, VerificationRuleMessageStore
 from .verification_settings_store import VerificationSettingsStore
