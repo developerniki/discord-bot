@@ -163,6 +163,16 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             # To be safe, remove the active verification messages
             # (so the user is not accidentally kicked by reaching the threshold).
             await self.remove_active_verification_messages(guild=member.guild, user=member)
+            if not member.pending:
+                await self._create_verification_button(member)
+            else:
+                # Tell the member to accept the rules by sending a message in the join channel.
+                join_channel_id = await self.verification_settings_store.get_join_channel_id(member.guild.id)
+                join_channel = join_channel_id and member.guild.get_channel(join_channel_id)
+                if join_channel:
+                    await join_channel.send(
+                        f'Welcome, {member.mention}! Please accept the rules to get a verification button!'
+                    )
 
     @commands.Cog.listener()
     async def on_member_update(self, before: Member, after: Member) -> None:
@@ -335,7 +345,6 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             await ctx.send(f'The adult role has been set to {role.mention}.', ephemeral=True)
 
     async def remove_active_verification_messages(self, guild: Guild, user: User | Member):
-        # FIXME Does not appear to work.
         messages = await self.active_ver_msg_store.get_active_verification_messages_by_user(
             guild_id=guild.id, user_id=user.id
         )
@@ -344,11 +353,10 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             channel = self.bot.get_channel(message_.channel_id)
             try:
                 message = await channel.fetch_message(message_.id)
-                if message is not None:
-                    await message.delete()
+                await message.delete()
             except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
                 _logger.error(
-                    f'Could not delete active verification message with {guild.id=}, {user.id=} and {message.id=} '
+                    f'Could not delete active verification message with {guild.id=}, {user.id=} and {message_.id=} '
                     f'and got error {e}.'
                 )
         await self.active_ver_msg_store.delete_active_verification_messages_by_user(guild_id=guild.id, user_id=user.id)
@@ -654,17 +662,7 @@ class VerificationNotificationView(ui.View):
                 # embed.set_thumbnail(url='attachment://image.png')
                 await welcome_channel.send(content=description)
 
-            # Remove the welcome message from the join channel. At this point, if it does not exist, we do not care.
-            join_channel_id = self.verification_request.join_channel_id
-            join_channel = self.vs.bot.get_channel(join_channel_id)
-            try:
-                join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
-                if join_message is not None:
-                    await join_message.delete()
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                pass
-
-            # Remove other welcome messages.
+            # Remove all welcome messages.
             await self.vs.remove_active_verification_messages(guild=interaction.guild, user=member)
 
             # Stop listening to the view and deactivate it.
@@ -681,10 +679,14 @@ class VerificationNotificationView(ui.View):
             embed.set_thumbnail(url='attachment://image.png')
 
             # Send the edited embed and view.
-            await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
-            await interaction.followup.send(
-                f"{interaction.user.mention} accepted {member.mention}'s verification request!"
-            )
+            try:
+                await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
+                await interaction.followup.send(
+                    f"{interaction.user.mention} accepted {member.mention}'s verification request!"
+                )
+            except discord.errors.NotFound:
+                # TODO Proper error handling.
+                pass
 
     async def reject_verification_request(self, interaction: Interaction) -> None:
         # The lock and `is_finished()` call ensure that the view is only responded to once.
