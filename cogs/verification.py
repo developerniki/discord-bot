@@ -236,6 +236,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     async def on_member_remove(self, member: Member) -> None:
         _logger.info(f'{tools.user_string(member)} left the server!')
         await self._remove_active_verification_messages(guild=member.guild, user=member)
+        await self._remove_rule_acceptance_messages(guild=member.guild, user=member)
         # TODO Modify verification request button if verification is incomplete and user leaves.
 
     @commands.hybrid_group()
