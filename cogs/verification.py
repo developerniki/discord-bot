@@ -18,8 +18,8 @@ from slimbot import SlimBot, tools
 _logger = logging.getLogger(__name__)
 
 # TODO Refactor.
-NUM_VERIFICATION_REMINDERS_BEFORE_KICK = 8
-REMIND_TO_VERIFY_EVERY_N_SECS = 6 * 3600
+NUM_VERIFICATION_REMINDERS_BEFORE_KICK = 4
+REMIND_TO_VERIFY_EVERY_N_SECS = 8 * 3600
 N_SECS_BETWEEN_VERIFICATION_REMINDERS = 60
 
 
@@ -78,7 +78,6 @@ class VerificationSystem(commands.Cog, name='Verification System'):
 
         verification_requests = await self.verification_request_store.get_pending_verification_requests()
         user_ids_with_active_requests = {request.user_id for request in verification_requests}
-        # TODO When user is verified or leaves or joins, clear ALL active requests.
 
         unverified_members = []
         for guild in self.bot.guilds:
@@ -101,6 +100,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                     num_reminders = await self.rule_msg_store.get_num_rule_messages_by_user(
                         guild_id=member.guild.id, user_id=member.id
                     )
+                _logger.info(f'{tools.user_string(member)} has received {num_reminders}/{NUM_VERIFICATION_REMINDERS_BEFORE_KICK} reminders.')
                 if num_reminders > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
                     try:
                         await member.kick(reason='user did not verify')
