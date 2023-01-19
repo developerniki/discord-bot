@@ -536,7 +536,7 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
             placeholder='Why are you here? Please give a detailed description.',
             style=discord.TextStyle.paragraph,
             required=True,
-            min_length=50,
+            min_length=35,
             max_length=500
         )
 
