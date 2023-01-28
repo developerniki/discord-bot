@@ -441,7 +441,7 @@ class TicketRequestView(ui.View):
         custom_id='request_ticket',
     )
     async def request_ticket(self, interaction: Interaction, _button: ui.Button) -> None:
-        _logger.info(f'{interaction.user} requested a ticket.')
+        _logger.info(f'{interaction.user} requested a ticket but not submitted it yet.')
         request_ticket_modal = TicketRequestModal(self.ts)
         await interaction.response.send_modal(request_ticket_modal)
 
