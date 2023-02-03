@@ -100,7 +100,8 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                     num_reminders = await self.rule_msg_store.get_num_rule_messages_by_user(
                         guild_id=member.guild.id, user_id=member.id
                     )
-                _logger.info(f'{tools.user_string(member)} has received {num_reminders}/{NUM_VERIFICATION_REMINDERS_BEFORE_KICK} reminders.')
+                _logger.info(
+                    f'{tools.user_string(member)} has received {num_reminders}/{NUM_VERIFICATION_REMINDERS_BEFORE_KICK} reminders.')
                 if num_reminders > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
                     try:
                         await member.kick(reason='user did not verify')
@@ -654,6 +655,7 @@ class VerificationNotificationView(ui.View):
                 role = interaction.guild.get_role(role_id)
                 try:
                     await member.add_roles(role, reason='verify the user')
+                    _logger.info(f'Assigned {role.name} to {tools.user_string(member)}.')
                 except discord.errors.Forbidden:
                     _logger.exception('The bot role is probably below the verification role.')
                     interaction.response.send_message(
@@ -671,6 +673,7 @@ class VerificationNotificationView(ui.View):
                     if adult_role is not None:
                         await member.add_roles(adult_role, reason=f'verify the user, assigning adult role as age is at '
                                                                   f'least {min_age}')
+                        _logger.info(f'Assigned {adult_role.name} to {tools.user_string(member)}.')
 
                 # Store the decision to verify the user in the database.
                 await self.vs.verification_request_store.close_verification_request(self.verification_request, True)
@@ -680,9 +683,7 @@ class VerificationNotificationView(ui.View):
                     interaction.guild_id
                 )
                 welcome_channel = interaction.guild.get_channel(welcome_channel_id)
-                welcome_message = await self.vs.verification_settings_store.get_welcome_message(
-                    interaction.guild_id
-                )
+                welcome_message = await self.vs.verification_settings_store.get_welcome_message(interaction.guild_id)
                 description = welcome_message.replace('<user>', member.mention)
                 # embed = Embed(title=f'Welcome to {interaction.guild.name}!',
                 #               description=description,
@@ -696,7 +697,9 @@ class VerificationNotificationView(ui.View):
                 await welcome_channel.send(content=description)
 
             # Remove all welcome messages.
+            _logger.info(f'Removing all welcome messages for {tools.user_string(member)}...')
             await self.vs._remove_active_verification_messages(guild=interaction.guild, user=member)
+            _logger.info(f'Removed all welcome messages for {tools.user_string(member)}.')
 
             # Stop listening to the view and deactivate it.
             self.stop()
@@ -717,9 +720,11 @@ class VerificationNotificationView(ui.View):
                 await interaction.followup.send(
                     f"{interaction.user.mention} accepted {member.mention}'s verification request!"
                 )
+                _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} and sent it.')
             except discord.errors.NotFound:
-                # TODO Proper error handling.
-                pass
+                _logger.exception(
+                    'The verification notification message could not be found, maybe because it was deleted.'
+                )
 
     async def reject_verification_request(self, interaction: Interaction) -> None:
         # The lock and `is_finished()` call ensure that the view is only responded to once.
