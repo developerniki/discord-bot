@@ -164,23 +164,5 @@ async def fetch_cat_picture_url() -> str:
     return await tools.fetch_html_escaped_string_from_api(url=url, key=key, default=default, from_list=True)
 
 
-async def fetch_insult() -> str:
-    """Fetch an insult from the evilinsult.com API."""
-    url = 'https://evilinsult.com/generate_insult.php?lang=en&type=json'
-    key = 'insult'
-    default = 'You suck!'
-    return await tools.fetch_html_escaped_string_from_api(url=url, key=key, default=default)
-
-
-async def fetch_insult_filter_you(max_retries=10) -> str:
-    """Fetch an insult from the evilinsult.com API until a response contains the word 'you'. Tries at most ten times.
-    Set `max_retries` to 0 to query the API an indefinite number of times.
-    """
-    insult = ''
-    while 'you' not in insult.lower() and max_retries > 0:
-        insult = await fetch_insult()
-    return insult
-
-
 async def setup(bot: SlimBot) -> None:
     await bot.add_cog(Fun(bot))
