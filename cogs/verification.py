@@ -239,7 +239,45 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         _logger.info(f'{tools.user_string(member)} left the server!')
         await self._remove_active_verification_messages(guild=member.guild, user=member)
         await self._remove_rule_acceptance_messages(guild=member.guild, user=member)
-        # TODO Modify verification request button if verification is incomplete and user leaves.
+        pending_requests = await self.verification_request_store.get_pending_verification_requests_by_user(
+            guild_id=member.guild.id, user_id=member.id
+        )
+        for verification_request in pending_requests:
+            verification_request: VerificationRequest
+            channel_id = verification_request.notification_channel_id
+            if channel_id:
+                channel = member.guild.get_channel(channel_id)
+                if channel:
+                    try:
+                        message = await channel.fetch_message(verification_request.notification_message_id)
+                        # Edit the original verification notification embed.
+                        embed = message.embeds[0]
+                        embed.title += ' [USER LEFT]'
+                        embed.colour = discord.Color.darker_gray()
+                        file = discord.File(self.bot.config.img_dir / 'user_left.png', filename='image.png')
+                        embed.set_thumbnail(url='attachment://image.png')
+                        # Edit the original verification notification view.
+                        view = discord.ui.View.from_message(message)
+                        # Delete all the buttons.
+                        for button in view.children:
+                            if isinstance(button, discord.ui.Button):
+                                view.remove_item(button)
+                        # Update the message with the new embed and view.
+                        try:
+                            message: discord.Message
+                            await message.edit(embed=embed, attachments=[file], view=view)
+                            _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} '
+                                         f'and sent it.')
+                        except discord.errors.NotFound:
+                            _logger.exception('The verification notification message could not be found, maybe because '
+                                              'it was deleted.')
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+                        _logger.error(
+                            f'Could not fetch verification request notification message with {member.guild.id=}, '
+                            f'{member.id=} and {verification_request.notification_message_id=} and got error {e}.'
+                        )
+            await self.verification_request_store.close_verification_request(verification_request=verification_request,
+                                                                             verified=False)
 
     @commands.hybrid_group()
     @commands.has_guild_permissions(manage_roles=True, manage_channels=True)
@@ -583,7 +621,14 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
                                                                       verification_request=verification_request)
 
         # Send the embed and view to the verification request channel.
-        await request_channel.send(embed=embed, file=file, view=verification_notification_view)
+        message = await request_channel.send(embed=embed, file=file, view=verification_notification_view)
+
+        # Update the verification request with the channel and message id.
+        await self.vs.verification_request_store.set_notification_channel_and_message(
+            verification_request=verification_request,
+            notification_channel_id=message.channel.id,
+            notification_message_id=message.id
+        )
 
         # Edit the original verification request button to show that verification is pending.
         view = VerificationRequestView(verification_system=self.vs)

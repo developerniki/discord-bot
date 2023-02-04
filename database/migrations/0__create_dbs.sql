@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS VerificationRequests(
     joined_at BIGINT NOT NULL,
     closed_at BIGINT,
     age VARCHAR,
-    gender VARCHAR
+    gender VARCHAR,
+    notification_channel_id BIGINT,
+    notification_message_id BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS ActiveVerificationMessages(
