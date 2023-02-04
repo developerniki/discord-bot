@@ -263,18 +263,14 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                             if isinstance(button, discord.ui.Button):
                                 view.remove_item(button)
                         # Update the message with the new embed and view.
-                        try:
-                            message: discord.Message
-                            await message.edit(embed=embed, attachments=[file], view=view)
-                            _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} '
-                                         f'and sent it.')
-                        except discord.errors.NotFound:
-                            _logger.exception('The verification notification message could not be found, maybe because '
-                                              'it was deleted.')
+                        message: discord.Message
+                        await message.edit(embed=embed, attachments=[file], view=view)
+                        _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} and '
+                                     f'sent it.')
                     except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
-                        _logger.error(
+                        _logger.exception(
                             f'Could not fetch verification request notification message with {member.guild.id=}, '
-                            f'{member.id=} and {verification_request.notification_message_id=} and got error {e}.'
+                            f'{member.id=} and {verification_request.notification_message_id=}.'
                         )
             await self.verification_request_store.close_verification_request(verification_request=verification_request,
                                                                              verified=False)
