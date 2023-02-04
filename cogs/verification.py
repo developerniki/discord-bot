@@ -140,8 +140,9 @@ class VerificationSystem(commands.Cog, name='Verification System'):
         role = role_id and user.guild.get_role(role_id)
 
         if None in (join_channel, join_message, welcome_channel, welcome_message, request_channel, role):
-            _logger.warning('One of the necessary settings is not configured/not configured properly for the '
-                            'verification system to work!')  # TODO Add the guild this problem occurred in
+            _logger.warning(f'One of the necessary settings is not configured/not configured properly for the '
+                            f'verification system to work properly in guild with id {user.guild.id} and name '
+                            f'{user.guild.name}.')
             success = False
         else:
             _logger.info(f'Making a verification button for {tools.user_string(user)}.')
