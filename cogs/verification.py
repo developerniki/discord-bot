@@ -743,8 +743,7 @@ class VerificationNotificationView(ui.View):
             await self.vs._remove_active_verification_messages(guild=interaction.guild, user=member)
             _logger.info(f'Removed all welcome messages for {tools.user_string(member)}.')
 
-            # Stop listening to the view and deactivate it.
-            self.stop()
+            # Modify the buttons to indicate that the action has been taken.
             self.remove_item(self.reject_button)
             self.accept_button.label = f'{self.accept_button.label}ed'
             self.accept_button.disabled = True
@@ -767,6 +766,9 @@ class VerificationNotificationView(ui.View):
                 _logger.exception(
                     'The verification notification message could not be found, maybe because it was deleted.'
                 )
+
+            # Stop listening to this view.
+            self.stop()
 
     async def reject_verification_request(self, interaction: Interaction) -> None:
         # The lock and `is_finished()` call ensure that the view is only responded to once.
@@ -858,8 +860,7 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
             if self.is_finished():
                 return
 
-            # Stop listening to the view and deactivate it.
-            self.stop()
+            # Modify the buttons to indicate that the action has been taken.
             self.verification_notification_view.remove_item(self.verification_notification_view.accept_button)
             reject_button_label = self.verification_notification_view.reject_button.label
             self.verification_notification_view.reject_button.label = f'{reject_button_label}ed'
@@ -881,6 +882,9 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
             if kick_reason:
                 message += f' They have provided the following reason:\n{tools.quote_message(kick_reason)}' or ''
             await interaction.response.send_message(message)
+
+            # Stop listening to this view.
+            self.stop()
 
 
 async def setup(bot: SlimBot) -> None:
