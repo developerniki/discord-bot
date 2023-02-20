@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "discord-bot"
+version = "0.1.0"
+description = ""
+authors = ["developerniki <114883451+developerniki@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "discord_bot"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+aiohttp = "^3.8.4"
+aiosqlite = "^0.18.0"
+"discord.py" = "^2.1.1"
+emoji = "^2.2.0"
+humanize = "^4.6.0"
+toml = "^0.10.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
