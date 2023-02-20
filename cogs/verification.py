@@ -763,8 +763,9 @@ class VerificationNotificationView(ui.View):
                 )
                 _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} and sent it.')
             except discord.errors.NotFound:
-                _logger.exception(
-                    'The verification notification message could not be found, maybe because it was deleted.'
+                _logger.error(
+                    f'The verification notification message with ID {interaction.id} (guild ID {interaction.guild.id},'
+                    f'channel ID {interaction.channel.id}) could not be found, maybe because it was deleted.'
                 )
 
             # Stop listening to this view.
