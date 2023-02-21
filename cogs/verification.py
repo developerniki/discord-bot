@@ -649,7 +649,6 @@ class VerificationNotificationView(ui.View):
         self.vs = verification_system
         self.verification_request = verification_request
         self.lock = asyncio.Lock()
-        self.message: Optional[Message] = None
         self.accept_button = ui.Button(label='Accept', style=ButtonStyle.green, emoji=emojize(':check_mark_button:'),
                                        custom_id=f'accept_verification_request#{self.verification_request.id}')
         self.reject_button = ui.Button(label='Reject', style=ButtonStyle.blurple, emoji=emojize(':no_entry:'),
@@ -757,7 +756,7 @@ class VerificationNotificationView(ui.View):
 
             # Send the edited embed and view.
             try:
-                await self.message.edit(embed=embed, attachments=[file], view=self)
+                await interaction.message.edit(embed=embed, attachments=[file], view=self)
                 _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} and sent it.')
             except discord.errors.NotFound:
                 _logger.error(
@@ -791,12 +790,11 @@ class VerificationNotificationView(ui.View):
                 _logger.info(f"{tools.user_string(interaction.user)} clicked the `Reject` button for "
                              f"{tools.user_string(member)}'s verification request.")
 
-                self.message = interaction.message
-
                 # Ask for confirmation and a reason to kick the user.
                 confirm_kick_modal = ConfirmKickModal(verification_system=self.vs,
                                                       verification_request=self.verification_request,
-                                                      verification_notification_view=self)
+                                                      verification_notification_view=self,
+                                                      message=interaction.message)
                 await interaction.response.send_modal(confirm_kick_modal)
 
 
@@ -804,11 +802,12 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
     """Asks the staff member to confirm if they want to reject the verification request and kick the user."""
 
     def __init__(self, verification_system: VerificationSystem, verification_request: VerificationRequest,
-                 verification_notification_view: VerificationNotificationView) -> None:
+                 verification_notification_view: VerificationNotificationView, message: Message) -> None:
         super().__init__()
         self.vs = verification_system
         self.verification_request = verification_request
         self.verification_notification_view = verification_notification_view
+        self.notification_verification_view_message = message
         self.kick_reason_text_input = ui.TextInput(
             label='Kick Reason',
             placeholder='Describe why the user cannot be verified and will be kicked.',
@@ -869,7 +868,7 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
             self.verification_notification_view.reject_button.disabled = True
 
             # Edit the original verification notification embed.
-            embed = self.verification_notification_view.message.embeds[0]
+            embed = self.notification_verification_view_message.embeds[0]
             embed.title += ' [REJECTED]'
             embed.colour = discord.Color.red()
             file = discord.File(self.vs.bot.config.img_dir / 'rejected_verification_request.png', filename='image.png')
@@ -877,9 +876,11 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
 
             # Send the edited embed and view.
             try:
-                await self.verification_notification_view.message.edit(embed=embed,
-                                                                       attachments=[file],
-                                                                       view=self.verification_notification_view)
+                await self.notification_verification_view_message.edit(
+                    embed=embed,
+                    attachments=[file],
+                    view=self.verification_notification_view
+                )
             except discord.errors.NotFound:
                 _logger.error(
                     f'The verification notification message with ID {interaction.id} (guild ID {interaction.guild.id},'
