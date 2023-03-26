@@ -760,7 +760,7 @@ class VerificationNotificationView(ui.View):
                 await interaction.response.send_message(
                     f"{interaction.user.mention} accepted {member.mention}'s verification request!"
                 )
-                await interaction.followup.edit(embed=embed, attachments=[file], view=self)
+                await interaction.message.edit(embed=embed, attachments=[file], view=self)
                 _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} and sent it.')
             except discord.errors.NotFound:
                 _logger.error(
