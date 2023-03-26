@@ -757,7 +757,7 @@ class VerificationNotificationView(ui.View):
 
             # Send the edited embed and view.
             try:
-                await interaction.send_message(
+                await interaction.response.send_message(
                     f"{interaction.user.mention} accepted {member.mention}'s verification request!"
                 )
                 await interaction.followup.edit(embed=embed, attachments=[file], view=self)
