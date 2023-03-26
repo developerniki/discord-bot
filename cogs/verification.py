@@ -687,6 +687,7 @@ class VerificationNotificationView(ui.View):
                       "appears they already left."
                 _logger.info(msg)
                 await interaction.response.send_message(msg)
+                return
             else:
                 _logger.info(f"{tools.user_string(interaction.user)} accepted {tools.user_string(member)}'s "
                              "verification request.")
@@ -756,17 +757,16 @@ class VerificationNotificationView(ui.View):
 
             # Send the edited embed and view.
             try:
-                await interaction.message.edit(embed=embed, attachments=[file], view=self)
+                await interaction.send_message(
+                    f"{interaction.user.mention} accepted {member.mention}'s verification request!"
+                )
+                await interaction.followup.edit(embed=embed, attachments=[file], view=self)
                 _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} and sent it.')
             except discord.errors.NotFound:
                 _logger.error(
                     f'The verification notification message with ID {interaction.id} (guild ID {interaction.guild.id},'
                     f'channel ID {interaction.channel.id}) could not be found, maybe because it was deleted.'
                 )
-
-            await interaction.response.send_message(
-                f"{interaction.user.mention} accepted {member.mention}'s verification request!"
-            )
 
             # Stop listening to this view.
             self.stop()
@@ -876,6 +876,11 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
 
             # Send the edited embed and view.
             try:
+                message = f"{interaction.user.mention} rejected {member.mention}'s verification request! " \
+                          "They were subsequently kicked."
+                if kick_reason:
+                    message += f' They have provided the following reason:\n{tools.quote_message(kick_reason)}' or ''
+                await interaction.response.send_message(message)
                 await self.notification_verification_view_message.edit(
                     embed=embed,
                     attachments=[file],
@@ -886,11 +891,6 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
                     f'The verification notification message with ID {interaction.id} (guild ID {interaction.guild.id},'
                     f'channel ID {interaction.channel.id}) could not be found, maybe because it was deleted.'
                 )
-            message = f"{interaction.user.mention} rejected {member.mention}'s verification request! " \
-                      "They were subsequently kicked."
-            if kick_reason:
-                message += f' They have provided the following reason:\n{tools.quote_message(kick_reason)}' or ''
-            await interaction.response.send_message(message)
 
             # Stop listening to this view.
             self.stop()
