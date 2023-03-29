@@ -678,6 +678,8 @@ class VerificationNotificationView(ui.View):
             if self.is_finished():
                 return
 
+            await interaction.response.defer()  # In case we take longer than 3 seconds.
+
             # Retrieve the member this verification request belongs to.
             member = interaction.guild.get_member(self.verification_request.user_id)
             if member is None:
@@ -776,6 +778,8 @@ class VerificationNotificationView(ui.View):
         async with self.lock:
             if self.is_finished():
                 return
+
+            await interaction.response.defer()  # In case we take longer than 3 seconds.
 
             # Retrieve the member this verification request belongs to.
             member = interaction.guild.get_member(self.verification_request.user_id)
