@@ -678,8 +678,6 @@ class VerificationNotificationView(ui.View):
             if self.is_finished():
                 return
 
-            await interaction.response.defer()  # In case we take longer than 3 seconds.
-
             # Retrieve the member this verification request belongs to.
             member = interaction.guild.get_member(self.verification_request.user_id)
             if member is None:
@@ -693,6 +691,33 @@ class VerificationNotificationView(ui.View):
             else:
                 _logger.info(f"{tools.user_string(interaction.user)} accepted {tools.user_string(member)}'s "
                              "verification request.")
+
+                # Modify the buttons to indicate that the action has been taken.
+                self.remove_item(self.reject_button)
+                self.accept_button.label = f'{self.accept_button.label}ed'
+                self.accept_button.disabled = True
+
+                # Edit the original verification notification embed.
+                embed = interaction.message.embeds[0]
+                embed.title += ' [ACCEPTED]'
+                embed.colour = discord.Color.green()
+                file = discord.File(self.vs.bot.config.img_dir / 'accepted_verification_request.png',
+                                    filename='image.png')
+                embed.set_thumbnail(url='attachment://image.png')
+
+                # Send the edited embed and view.
+                try:
+                    await interaction.response.send_message(
+                        f"{interaction.user.mention} accepted {member.mention}'s verification request!"
+                    )
+                    await interaction.message.edit(embed=embed, attachments=[file], view=self)
+                    _logger.info(
+                        f'Edited the verification notification embed for {tools.user_string(member)} and sent it.')
+                except discord.errors.NotFound:
+                    _logger.error(
+                        f'The verification notification message with ID {interaction.id} (guild ID {interaction.guild.id},'
+                        f'channel ID {interaction.channel.id}) could not be found, maybe because it was deleted.'
+                    )
 
                 # Assign the verification and adult (if eligible) roles to the user.
                 role_id = await self.vs.verification_settings_store.get_verification_role_id(interaction.guild_id)
@@ -745,31 +770,6 @@ class VerificationNotificationView(ui.View):
             await self.vs._remove_active_verification_messages(guild=interaction.guild, user=member)
             _logger.info(f'Removed all welcome messages for {tools.user_string(member)}.')
 
-            # Modify the buttons to indicate that the action has been taken.
-            self.remove_item(self.reject_button)
-            self.accept_button.label = f'{self.accept_button.label}ed'
-            self.accept_button.disabled = True
-
-            # Edit the original verification notification embed.
-            embed = interaction.message.embeds[0]
-            embed.title += ' [ACCEPTED]'
-            embed.colour = discord.Color.green()
-            file = discord.File(self.vs.bot.config.img_dir / 'accepted_verification_request.png', filename='image.png')
-            embed.set_thumbnail(url='attachment://image.png')
-
-            # Send the edited embed and view.
-            try:
-                await interaction.response.send_message(
-                    f"{interaction.user.mention} accepted {member.mention}'s verification request!"
-                )
-                await interaction.message.edit(embed=embed, attachments=[file], view=self)
-                _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} and sent it.')
-            except discord.errors.NotFound:
-                _logger.error(
-                    f'The verification notification message with ID {interaction.id} (guild ID {interaction.guild.id},'
-                    f'channel ID {interaction.channel.id}) could not be found, maybe because it was deleted.'
-                )
-
             # Stop listening to this view.
             self.stop()
 
@@ -778,8 +778,6 @@ class VerificationNotificationView(ui.View):
         async with self.lock:
             if self.is_finished():
                 return
-
-            await interaction.response.defer()  # In case we take longer than 3 seconds.
 
             # Retrieve the member this verification request belongs to.
             member = interaction.guild.get_member(self.verification_request.user_id)
@@ -822,49 +820,12 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
         self.add_item(self.kick_reason_text_input)
 
     async def on_submit(self, interaction: Interaction) -> None:
-        # Kick the user.
-        user_id = self.verification_request.user_id
-        member = interaction.guild.get_member(user_id)
-        kick_reason = self.kick_reason_text_input.value
-        if member is None:
-            user = self.vs.bot.get_user(self.verification_request.user_id)
-            user_mention = user.mention if user is not None else '<deleted user>'
-            msg = f"{interaction.user.mention} tried to reject {user_mention}'s verification request and kick them " \
-                  f"with {kick_reason=} but it appears they already left."
-            _logger.info(msg)
-            await interaction.response.send_message(msg)
-        else:
-            _logger.info(f"{tools.user_string(interaction.user)} rejected {tools.user_string(member)}'s verification "
-                         f"request for {kick_reason=}.")
-            try:
-                await member.kick(reason=kick_reason)
-            except Forbidden:
-                _logger.warning(f"Couldn't kick {tools.user_string(member)}")
-
-            # Store the decision to not verify the user in the database.
-            await self.vs.verification_request_store.close_verification_request(self.verification_request, False)
-
-            # Remove the join message from the join channel. At this point, if it does not exist, we do not care.
-            join_channel_id = await self.vs.verification_settings_store.get_join_channel_id(
-                guild_id=interaction.guild_id)
-            join_channel = self.vs.bot.get_channel(join_channel_id)
-            if join_channel is not None:
-                try:
-                    join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
-                    if join_message is not None:
-                        await join_message.delete()
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                    pass
-
-            # Remove other welcome messages.
-            await self.vs._remove_active_verification_messages(guild=interaction.guild, user=member)
-
-        # Modify verification notification message.
         # The lock and `is_finished()` call ensure that the view is only responded to once.
         async with self.verification_notification_view.lock:
             if self.is_finished():
                 return
 
+            # Modify verification notification message.
             # Modify the buttons to indicate that the action has been taken.
             self.verification_notification_view.remove_item(self.verification_notification_view.accept_button)
             reject_button_label = self.verification_notification_view.reject_button.label
@@ -875,7 +836,8 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
             embed = self.notification_verification_view_message.embeds[0]
             embed.title += ' [REJECTED]'
             embed.colour = discord.Color.red()
-            file = discord.File(self.vs.bot.config.img_dir / 'rejected_verification_request.png', filename='image.png')
+            file = discord.File(self.vs.bot.config.img_dir / 'rejected_verification_request.png',
+                                filename='image.png')
             embed.set_thumbnail(url='attachment://image.png')
 
             # Send the edited embed and view.
@@ -895,6 +857,43 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
                     f'The verification notification message with ID {interaction.id} (guild ID {interaction.guild.id},'
                     f'channel ID {interaction.channel.id}) could not be found, maybe because it was deleted.'
                 )
+
+            # Kick the user.
+            user_id = self.verification_request.user_id
+            member = interaction.guild.get_member(user_id)
+            kick_reason = self.kick_reason_text_input.value
+            if member is None:
+                user = self.vs.bot.get_user(self.verification_request.user_id)
+                user_mention = user.mention if user is not None else '<deleted user>'
+                msg = f"{interaction.user.mention} tried to reject {user_mention}'s verification request and kick " \
+                      f"them with {kick_reason=} but it appears they already left."
+                _logger.info(msg)
+                await interaction.response.send_message(msg)
+            else:
+                _logger.info(f"{tools.user_string(interaction.user)} rejected {tools.user_string(member)}'s "
+                             f"verification request for {kick_reason=}.")
+                try:
+                    await member.kick(reason=kick_reason)
+                except Forbidden:
+                    _logger.warning(f"Couldn't kick {tools.user_string(member)}")
+
+                # Store the decision to not verify the user in the database.
+                await self.vs.verification_request_store.close_verification_request(self.verification_request, False)
+
+                # Remove the join message from the join channel. At this point, if it does not exist, we do not care.
+                join_channel_id = await self.vs.verification_settings_store.get_join_channel_id(
+                    guild_id=interaction.guild_id)
+                join_channel = self.vs.bot.get_channel(join_channel_id)
+                if join_channel is not None:
+                    try:
+                        join_message = await join_channel.fetch_message(self.verification_request.join_message_id)
+                        if join_message is not None:
+                            await join_message.delete()
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        pass
+
+                # Remove other welcome messages.
+                await self.vs._remove_active_verification_messages(guild=interaction.guild, user=member)
 
             # Stop listening to this view.
             self.stop()
