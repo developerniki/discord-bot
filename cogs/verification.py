@@ -252,21 +252,22 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                         message = await channel.fetch_message(verification_request.notification_message_id)
                         # Edit the original verification notification embed.
                         embed = message.embeds[0]
-                        embed.title += ' [USER LEFT]'
-                        embed.colour = discord.Color.darker_gray()
-                        file = discord.File(self.bot.config.img_dir / 'user_left.png', filename='image.png')
-                        embed.set_thumbnail(url='attachment://image.png')
-                        # Edit the original verification notification view.
-                        view = discord.ui.View.from_message(message)
-                        # Delete all the buttons.
-                        for button in view.children:
-                            if isinstance(button, discord.ui.Button):
-                                view.remove_item(button)
-                        # Update the message with the new embed and view.
-                        message: discord.Message
-                        await message.edit(embed=embed, attachments=[file], view=view)
-                        _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} and '
-                                     f'sent it.')
+                        if not embed.title.endswith(' [REJECTED]'):
+                            embed.title += ' [USER LEFT]'
+                            embed.colour = discord.Color.darker_gray()
+                            file = discord.File(self.bot.config.img_dir / 'user_left.png', filename='image.png')
+                            embed.set_thumbnail(url='attachment://image.png')
+                            # Edit the original verification notification view.
+                            view = discord.ui.View.from_message(message)
+                            # Delete all the buttons.
+                            for button in view.children:
+                                if isinstance(button, discord.ui.Button):
+                                    view.remove_item(button)
+                            # Update the message with the new embed and view.
+                            message: discord.Message
+                            await message.edit(embed=embed, attachments=[file], view=view)
+                            _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} '
+                                         f'and sent it.')
                     except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
                         _logger.exception(
                             f'Could not fetch verification request notification message with {member.guild.id=}, '
