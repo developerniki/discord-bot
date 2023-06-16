@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List
 
 from database import BaseStore
-from slimbot import tools
+from slimbot import utils
 
 
 class VerificationRuleMessage:
@@ -27,7 +27,7 @@ class VerificationRuleMessageStore(BaseStore):
         VerificationRuleMessages(id, guild_id, user_id, channel_id, created_at)
         VALUES (?, ?, ?, ?, ?)
         """
-        created_at = tools.unix_seconds_from_discord_snowflake_id(message_id)
+        created_at = utils.unix_seconds_from_discord_snowflake_id(message_id)
         params = (message_id, guild_id, user_id, channel_id, created_at)
         await self.execute_query(query, params)
         verification_rule_message = VerificationRuleMessage(id=message_id, guild_id=guild_id, user_id=user_id,

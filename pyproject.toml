@@ -5,14 +5,13 @@ description = ""
 authors = ["developerniki <114883451+developerniki@users.noreply.github.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "discord_bot"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
 aiohttp = "^3.8.4"
-aiosqlite = "^0.18.0"
-"discord.py" = "^2.1.1"
-emoji = "^2.2.0"
+aiosqlite = "^0.19.0"
+"discord.py" = "^2.3.0"
+emoji = "^2.5.1"
 humanize = "^4.6.0"
 toml = "^0.10.2"
 

@@ -12,7 +12,8 @@ def quote_message(message: str):
 
 def user_string(user: User | Member) -> str:
     """Given a `User` or `Member`, return a string containing the user's name, discriminator, and user ID."""
-    return f'{user.name}#{user.discriminator} ({user.id})'
+    discriminator_str = f'#{user.discriminator}' if user.discriminator else ''
+    return f'{user.name}{discriminator_str} ({user.id})'
 
 
 def unix_seconds_from_discord_snowflake_id(snowflake_id: int) -> int:

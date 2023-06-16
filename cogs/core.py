@@ -4,7 +4,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-from slimbot import SlimBot, tools
+from slimbot import SlimBot, utils
 
 _logger = logging.getLogger(__name__)
 
@@ -46,13 +46,13 @@ class Core(commands.Cog, name='Core'):
         """Loads an extension."""
         try:
             await self.bot.load_extension(f'{self.bot.config.ext_dir.name}.{name}')
-            _logger.info(f'{tools.user_string(ctx.author)} successfully loaded extension {name}.')
+            _logger.info(f'{utils.user_string(ctx.author)} successfully loaded extension {name}.')
             embed = discord.Embed(title='Loaded Extension', description=f'Loaded **{name}**.',
                                   color=discord.Color.purple())
             await ctx.send(embed=embed, ephemeral=True)
         except commands.ExtensionNotFound:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to load extension {name} but it could not be found.'
+                f'{utils.user_string(ctx.author)} attempted to load extension {name} but it could not be found.'
             )
             embed = discord.Embed(title='Error while loading extension',
                                   description=f'Could not find extension **{name}**.',
@@ -60,21 +60,21 @@ class Core(commands.Cog, name='Core'):
             await ctx.send(embed=embed, ephemeral=True)
         except commands.ExtensionAlreadyLoaded:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to load extension {name} but it was already loaded.'
+                f'{utils.user_string(ctx.author)} attempted to load extension {name} but it was already loaded.'
             )
             embed = discord.Embed(title='Error while loading extension',
                                   description=f'Extension **{name}** is already loaded.', color=discord.Color.red())
             await ctx.send(embed=embed, ephemeral=True)
         except commands.NoEntryPointError:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to load extension {name} but no entry point was found.'
+                f'{utils.user_string(ctx.author)} attempted to load extension {name} but no entry point was found.'
             )
             embed = discord.Embed(title='Error while loading extension',
                                   description=f'Could not find extension **{name}**.', color=discord.Color.red())
             await ctx.send(embed=embed, ephemeral=True)
         except commands.ExtensionFailed:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to load extension {name} but it failed to load.'
+                f'{utils.user_string(ctx.author)} attempted to load extension {name} but it failed to load.'
             )
             embed = discord.Embed(
                 title='Error while loading extension',
@@ -89,13 +89,13 @@ class Core(commands.Cog, name='Core'):
         """Unloads an extension."""
         try:
             await self.bot.unload_extension(f'{self.bot.config.ext_dir.name}.{name}')
-            _logger.info(f'{tools.user_string(ctx.author)} successfully unloaded extension {name}.')
+            _logger.info(f'{utils.user_string(ctx.author)} successfully unloaded extension {name}.')
             embed = discord.Embed(title='Unloaded extension', description=f'Unloaded **{name}**.',
                                   color=discord.Color.purple())
             await ctx.send(embed=embed, ephemeral=True)
         except commands.ExtensionNotFound:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to unload extension {name} but it could not be found.'
+                f'{utils.user_string(ctx.author)} attempted to unload extension {name} but it could not be found.'
             )
             embed = discord.Embed(title='Error while unloading extension',
                                   description=f'Could not find extension **{name}**.',
@@ -103,7 +103,7 @@ class Core(commands.Cog, name='Core'):
             await ctx.send(embed=embed, ephemeral=True)
         except commands.ExtensionNotLoaded:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to unload extension {name} but it was already unloaded.'
+                f'{utils.user_string(ctx.author)} attempted to unload extension {name} but it was already unloaded.'
             )
             embed = discord.Embed(title='Error while unloading extension',
                                   description=f'Extension **{name}** is already unloaded.', color=discord.Color.red())
@@ -115,13 +115,13 @@ class Core(commands.Cog, name='Core'):
         """Reloads an extension."""
         try:
             await self.bot.reload_extension(f'{self.bot.config.ext_dir.name}.{name}')
-            _logger.info(f'{tools.user_string(ctx.author)} successfully reloaded extension {name}.')
+            _logger.info(f'{utils.user_string(ctx.author)} successfully reloaded extension {name}.')
             embed = discord.Embed(title='Reloaded extension', description=f'Reloaded **{name}**.',
                                   color=discord.Color.purple())
             await ctx.send(embed=embed, ephemeral=True)
         except commands.ExtensionNotFound:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to reload extension {name} but it could not be found.'
+                f'{utils.user_string(ctx.author)} attempted to reload extension {name} but it could not be found.'
             )
             embed = discord.Embed(title='Error while reloading extension',
                                   description=f'Could not find extension **{name}**.',
@@ -129,21 +129,21 @@ class Core(commands.Cog, name='Core'):
             await ctx.send(embed=embed, ephemeral=True)
         except commands.ExtensionNotLoaded:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to reload extension {name} but it was already unloaded.'
+                f'{utils.user_string(ctx.author)} attempted to reload extension {name} but it was already unloaded.'
             )
             embed = discord.Embed(title='Error while reloading extension',
                                   description=f'Extension **{name}** is unloaded.', color=discord.Color.red())
             await ctx.send(embed=embed, ephemeral=True)
         except commands.NoEntryPointError:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to reload extension {name} but no entry point was found.'
+                f'{utils.user_string(ctx.author)} attempted to reload extension {name} but no entry point was found.'
             )
             embed = discord.Embed(title='Error while reloading extension',
                                   description=f'Could not find extension **{name}**.', color=discord.Color.red())
             await ctx.send(embed=embed, ephemeral=True)
         except commands.ExtensionFailed:
             _logger.warning(
-                f'{tools.user_string(ctx.author)} attempted to reload extension {name} but it failed to load.'
+                f'{utils.user_string(ctx.author)} attempted to reload extension {name} but it failed to load.'
             )
             embed = discord.Embed(
                 title='Error while reloading extension',

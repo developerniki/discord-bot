@@ -13,7 +13,7 @@ from emoji import emojize
 
 from database import VerificationRequest, VerificationSettingsStore, VerificationRequestStore, \
     ActiveVerificationMessageStore, ActiveVerificationMessage, VerificationRuleMessageStore, VerificationRuleMessage
-from slimbot import SlimBot, tools
+from slimbot import SlimBot, utils
 
 _logger = logging.getLogger(__name__)
 
@@ -101,13 +101,13 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                         guild_id=member.guild.id, user_id=member.id
                     )
                 _logger.info(
-                    f'{tools.user_string(member)} has received {num_reminders}/{NUM_VERIFICATION_REMINDERS_BEFORE_KICK} reminders.')
+                    f'{utils.user_string(member)} has received {num_reminders}/{NUM_VERIFICATION_REMINDERS_BEFORE_KICK} reminders.')
                 if num_reminders > NUM_VERIFICATION_REMINDERS_BEFORE_KICK:
                     try:
                         await member.kick(reason='user did not verify')
-                        _logger.info(f'Kicked {tools.user_string(member)} because they did not verify')
+                        _logger.info(f'Kicked {utils.user_string(member)} because they did not verify')
                     except Forbidden:
-                        _logger.warning(f'Could not kick {tools.user_string(member)} in guild with id '
+                        _logger.warning(f'Could not kick {utils.user_string(member)} in guild with id '
                                         f'{member.guild.id} because permissions are missing')
                 else:
                     if member.pending:
@@ -145,7 +145,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                             f'{user.guild.name}.')
             success = False
         else:
-            _logger.info(f'Making a verification button for {tools.user_string(user)}.')
+            _logger.info(f'Making a verification button for {utils.user_string(user)}.')
             verification_request_view = VerificationRequestView(self)
             if '<user>' in join_message:
                 join_message = join_message.replace('<user>', user.mention)
@@ -154,7 +154,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
             description = join_message
             embed = Embed(title=f'Welcome to {user.guild.name}!', description=description,
                           color=discord.Color.blue(), timestamp=datetime.now(timezone.utc))
-            embed.set_author(name=tools.user_string(user),
+            embed.set_author(name=utils.user_string(user),
                              url=f'https://discordapp.com/users/{user.id}',
                              icon_url=user.display_avatar)
             file = discord.File(self.bot.config.img_dir / 'welcome1.png', filename='image.png')
@@ -210,7 +210,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: Member) -> None:
-        _logger.info(f'{tools.user_string(member)} joined the server!')
+        _logger.info(f'{utils.user_string(member)} joined the server!')
         if not member.bot:
             # To be safe, remove the active verification messages
             # (so the user is not accidentally kicked by reaching the threshold).
@@ -227,16 +227,16 @@ class VerificationSystem(commands.Cog, name='Verification System'):
     @commands.Cog.listener()
     async def on_member_update(self, before: Member, after: Member) -> None:
         if before.pending and not after.pending:
-            _logger.info(f'{tools.user_string(after)} completed the rules screening!')
+            _logger.info(f'{utils.user_string(after)} completed the rules screening!')
             if after.bot:
-                _logger.info(f'{tools.user_string(after)} is a bot, so not making a verification button.')
+                _logger.info(f'{utils.user_string(after)} is a bot, so not making a verification button.')
             else:
                 await self._remove_rule_acceptance_messages(guild=after.guild, user=after)
                 await self._create_verification_message(after)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: Member) -> None:
-        _logger.info(f'{tools.user_string(member)} left the server!')
+        _logger.info(f'{utils.user_string(member)} left the server!')
         await self._remove_active_verification_messages(guild=member.guild, user=member)
         await self._remove_rule_acceptance_messages(guild=member.guild, user=member)
         pending_requests = await self.verification_request_store.get_pending_verification_requests_by_user(
@@ -266,7 +266,7 @@ class VerificationSystem(commands.Cog, name='Verification System'):
                             # Update the message with the new embed and view.
                             message: discord.Message
                             await message.edit(embed=embed, attachments=[file], view=view)
-                            _logger.info(f'Edited the verification notification embed for {tools.user_string(member)} '
+                            _logger.info(f'Edited the verification notification embed for {utils.user_string(member)} '
                                          f'and sent it.')
                     except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
                         _logger.exception(
@@ -450,7 +450,7 @@ class VerificationRequestView(ui.View):
         mentioned_user_ids = self.mention_pattern.findall(embed_description)
         mentioned_user_ids = [int(x) for x in mentioned_user_ids]
         if interaction.user.id not in mentioned_user_ids:
-            _logger.info(f"{tools.user_string(interaction.user)} clicked someone else's verification button.")
+            _logger.info(f"{utils.user_string(interaction.user)} clicked someone else's verification button.")
             await interaction.response.send_message('This is not your verification button!', ephemeral=True)
             return False
         else:
@@ -463,7 +463,7 @@ class VerificationRequestView(ui.View):
         custom_id='request_verification',
     )
     async def request_verification(self, interaction: Interaction, _button: ui.Button) -> None:
-        _logger.info(f'{tools.user_string(interaction.user)} clicked their own verification button. '
+        _logger.info(f'{utils.user_string(interaction.user)} clicked their own verification button. '
                      f'Sending basic info view.')
         choose_basic_info_view = ChooseBasicInfoView(verification_system=self.vs)
         await interaction.response.send_message(view=choose_basic_info_view, ephemeral=True)
@@ -511,13 +511,13 @@ class ChooseBasicInfoView(ui.View):
     async def age_range_selected(self, interaction: Interaction):
         age_range = self.age_range_select.values
         age_range = age_range and age_range[0]
-        _logger.info(f'{tools.user_string(interaction.user)} selected {age_range=}.')
+        _logger.info(f'{utils.user_string(interaction.user)} selected {age_range=}.')
         await interaction.response.defer()
 
     async def gender_selected(self, interaction: Interaction):
         gender = self.gender_select.values
         gender = gender and gender[0]
-        _logger.info(f'{tools.user_string(interaction.user)} selected {gender=}.')
+        _logger.info(f'{utils.user_string(interaction.user)} selected {gender=}.')
         await interaction.response.defer()
 
     async def submit(self, interaction: Interaction) -> None:
@@ -536,7 +536,7 @@ class ChooseBasicInfoView(ui.View):
         gender = self.gender_select.values
         gender = gender and gender[0]
 
-        _logger.info(f'{tools.user_string(interaction.user)} submitted the basic info {age_range=} and {gender=}.')
+        _logger.info(f'{utils.user_string(interaction.user)} submitted the basic info {age_range=} and {gender=}.')
 
         if not gender or not age_range:
             await interaction.response.send_message(content='Please fill out both fields!', ephemeral=True)
@@ -581,7 +581,7 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         self.add_item(self.join_reason_text_input)
 
     async def on_submit(self, interaction: Interaction) -> None:
-        _logger.info(f'{tools.user_string(interaction.user)} submitted their verification request with '
+        _logger.info(f'{utils.user_string(interaction.user)} submitted their verification request with '
                      f'{self.age_range=}, {self.gender=}, {self.referrer_text_input.value=} and '
                      f'{self.join_reason_text_input.value=}.')
 
@@ -607,7 +607,7 @@ class ChooseAdvancedInfoModal(ui.Modal, title='Just a few more questions...'):
         embed.add_field(name='gender', value=self.gender)
         embed.add_field(name='referrer', value=self.referrer_text_input.value)
         embed.add_field(name='join reason', value=self.join_reason_text_input.value)
-        embed.set_author(name=tools.user_string(interaction.user),
+        embed.set_author(name=utils.user_string(interaction.user),
                          url=f'https://discordapp.com/users/{interaction.user.id}',
                          icon_url=interaction.user.display_avatar)
         file = discord.File(self.vs.bot.config.img_dir / 'accept_reject.png', filename='image.png')
@@ -667,7 +667,7 @@ class VerificationNotificationView(ui.View):
         else:
             member = interaction.guild.get_member(self.verification_request.user_id)
             _logger.info(
-                f"{tools.user_string(interaction.user)} tried to verify or reject {tools.user_string(member)}'s "
+                f"{utils.user_string(interaction.user)} tried to verify or reject {utils.user_string(member)}'s "
                 "verification request even though they lack the necessary permissions."
             )
             await interaction.response.send_message('You are not allowed to do this action!', ephemeral=True)
@@ -690,7 +690,7 @@ class VerificationNotificationView(ui.View):
                 await interaction.response.send_message(msg)
                 return
             else:
-                _logger.info(f"{tools.user_string(interaction.user)} accepted {tools.user_string(member)}'s "
+                _logger.info(f"{utils.user_string(interaction.user)} accepted {utils.user_string(member)}'s "
                              "verification request.")
 
                 # Modify the buttons to indicate that the action has been taken.
@@ -713,7 +713,7 @@ class VerificationNotificationView(ui.View):
                     )
                     await interaction.message.edit(embed=embed, attachments=[file], view=self)
                     _logger.info(
-                        f'Edited the verification notification embed for {tools.user_string(member)} and sent it.')
+                        f'Edited the verification notification embed for {utils.user_string(member)} and sent it.')
                 except discord.errors.NotFound:
                     _logger.error(
                         f'The verification notification message with ID {interaction.id} (guild ID {interaction.guild.id},'
@@ -725,7 +725,7 @@ class VerificationNotificationView(ui.View):
                 role = interaction.guild.get_role(role_id)
                 try:
                     await member.add_roles(role, reason='verify the user')
-                    _logger.info(f'Assigned {role.name} to {tools.user_string(member)}.')
+                    _logger.info(f'Assigned {role.name} to {utils.user_string(member)}.')
                 except discord.errors.Forbidden:
                     _logger.exception('The bot role is probably below the verification role.')
                     interaction.response.send_message(
@@ -743,7 +743,7 @@ class VerificationNotificationView(ui.View):
                     if adult_role is not None:
                         await member.add_roles(adult_role, reason=f'verify the user, assigning adult role as age is at '
                                                                   f'least {min_age}')
-                        _logger.info(f'Assigned {adult_role.name} to {tools.user_string(member)}.')
+                        _logger.info(f'Assigned {adult_role.name} to {utils.user_string(member)}.')
 
                 # Store the decision to verify the user in the database.
                 await self.vs.verification_request_store.close_verification_request(self.verification_request, True)
@@ -759,7 +759,7 @@ class VerificationNotificationView(ui.View):
                 #               description=description,
                 #               color=discord.Color.green(),
                 #               timestamp=datetime.now(timezone.utc))
-                # embed.set_author(name=tools.user_string(interaction.user),
+                # embed.set_author(name=utils.user_string(interaction.user),
                 #                  url=f'https://discordapp.com/users/{interaction.user.id}',
                 #                  icon_url=interaction.user.display_avatar)
                 # file = discord.File(self.vs.bot.img_dir / 'welcome2.png', filename='image.png')
@@ -767,9 +767,9 @@ class VerificationNotificationView(ui.View):
                 await welcome_channel.send(content=description)
 
             # Remove all welcome messages.
-            _logger.info(f'Removing all welcome messages for {tools.user_string(member)}...')
+            _logger.info(f'Removing all welcome messages for {utils.user_string(member)}...')
             await self.vs._remove_active_verification_messages(guild=interaction.guild, user=member)
-            _logger.info(f'Removed all welcome messages for {tools.user_string(member)}.')
+            _logger.info(f'Removed all welcome messages for {utils.user_string(member)}.')
 
             # Stop listening to this view.
             self.stop()
@@ -790,8 +790,8 @@ class VerificationNotificationView(ui.View):
                 _logger.info(msg)
                 await interaction.response.send_message(msg)
             else:
-                _logger.info(f"{tools.user_string(interaction.user)} clicked the `Reject` button for "
-                             f"{tools.user_string(member)}'s verification request.")
+                _logger.info(f"{utils.user_string(interaction.user)} clicked the `Reject` button for "
+                             f"{utils.user_string(member)}'s verification request.")
 
                 # Ask for confirmation and a reason to kick the user.
                 confirm_kick_modal = ConfirmKickModal(verification_system=self.vs,
@@ -860,7 +860,7 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
                 message = f"{interaction.user.mention} rejected {member.mention}'s verification request! " \
                           "They were subsequently kicked."
                 if kick_reason:
-                    message += f' They have provided the following reason:\n{tools.quote_message(kick_reason)}' or ''
+                    message += f' They have provided the following reason:\n{utils.quote_message(kick_reason)}' or ''
                 await interaction.response.send_message(message)
                 await self.notification_verification_view_message.edit(
                     embed=embed,
@@ -873,12 +873,12 @@ class ConfirmKickModal(ui.Modal, title='Kick the user?'):
                     f'channel ID {interaction.channel.id}) could not be found, maybe because it was deleted.'
                 )
 
-            _logger.info(f"{tools.user_string(interaction.user)} rejected {tools.user_string(member)}'s "
+            _logger.info(f"{utils.user_string(interaction.user)} rejected {utils.user_string(member)}'s "
                          f"verification request for {kick_reason=}.")
             try:
                 await member.kick(reason=kick_reason)
             except Forbidden:
-                _logger.warning(f"Couldn't kick {tools.user_string(member)}")
+                _logger.warning(f"Couldn't kick {utils.user_string(member)}")
 
                 # Store the decision to not verify the user in the database.
                 await self.vs.verification_request_store.close_verification_request(self.verification_request, False)

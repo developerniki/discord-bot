@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from database import BaseStore
-from slimbot import tools
+from slimbot import utils
 
 
 class VerificationRequest:
@@ -41,7 +41,7 @@ class VerificationRequestStore(BaseStore):
                     )
                     VALUES (?, ?, ?, ?, FALSE, ?, ?, ?, NULL, NULL)
                     """
-        joined_at = tools.unix_seconds_from_discord_snowflake_id(join_message_id)
+        joined_at = utils.unix_seconds_from_discord_snowflake_id(join_message_id)
         params = (guild_id, user_id, join_channel_id, join_message_id, joined_at, age, gender)
         _num_rows, lastrowid = await self.execute_query(query, params)
         verification_request = VerificationRequest(id=lastrowid, guild_id=guild_id, user_id=user_id,

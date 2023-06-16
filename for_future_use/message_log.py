@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 from discord import Message
 
 from database import Ticket
-from slimbot import tools
+from slimbot import utils
 
 _logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def __log_header_as_str(self, ticket: Ticket, time_fmt: str) -> str:
 
     ticket_user = self.bot.get_user(ticket.user_id)
     header = f'Transcript of ticket #{ticket.id}, created at {created_at} for ' \
-             f'user {tools.user_string(ticket_user)}'
+             f'user {utils.user_string(ticket_user)}'
     if ticket.reason:
         header += f' with reason "{ticket.reason}" '
     header += f'and closed at {closed_at}\n'
@@ -56,7 +56,7 @@ def __log_body_as_str(messages: List[Message], time_fmt: str) -> str:
     body_as_list = []
     for message in messages:
         created_at = message.created_at.strftime(time_fmt)
-        author = tools.user_string(message.author)
+        author = utils.user_string(message.author)
         content = message.content.strip()
         embeds = [json.dumps(embed.to_dict(), separators=(',', ':')) for embed in message.embeds]
         embeds = '\n'.join(embeds)

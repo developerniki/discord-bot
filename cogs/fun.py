@@ -10,7 +10,7 @@ from discord import User
 from discord.ext import commands
 from emoji import demojize, emojize
 
-from slimbot import SlimBot, tools
+from slimbot import SlimBot, utils
 
 _logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class Fun(commands.Cog, name='Fun'):
     #     for pattern_action in self.pattern_to_action:
     #         if pattern_action.match_lower_with_chance(message.content):
     #             _logger.info(f'Responding to pattern in message "{message.content}" by user '
-    #                          f'{tools.user_string(message.author)}.')
+    #                          f'{utils.user_string(message.author)}.')
     #             reaction = pattern_action.random_reaction()
     #             response = pattern_action.random_response()
     #             if reaction is not None:
@@ -161,7 +161,7 @@ async def fetch_cat_picture_url() -> str:
         'https://en.wikipedia.org/wiki/Cat#/media/File:Felis_catus-cat_on_snow.jpg',
         'https://en.wikipedia.org/wiki/Cat#/media/File:Black_Cat_(7983739954).jpg',
     ])
-    return await tools.fetch_html_escaped_string_from_api(url=url, key=key, default=default, from_list=True)
+    return await utils.fetch_html_escaped_string_from_api(url=url, key=key, default=default, from_list=True)
 
 
 async def setup(bot: SlimBot) -> None:

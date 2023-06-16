@@ -5,7 +5,7 @@ from typing import Any
 import discord
 from discord.ext import commands
 
-from slimbot import SlimBot, tools
+from slimbot import SlimBot, utils
 
 _logger = logging.getLogger(__name__)
 
@@ -95,11 +95,11 @@ class CommandHook(commands.Cog, name='Command Hook'):
 
     @commands.Cog.listener()
     async def on_command(self, ctx: commands.Context) -> None:
-        _logger.info(f'{tools.user_string(ctx.author)} used `{self.__command_string(ctx)}` (invoked).')
+        _logger.info(f'{utils.user_string(ctx.author)} used `{self.__command_string(ctx)}` (invoked).')
 
     @commands.Cog.listener()
     async def on_command_completion(self, ctx: commands.Context) -> None:
-        _logger.info(f'{tools.user_string(ctx.author)} used `{self.__command_string(ctx)}` (completed).')
+        _logger.info(f'{utils.user_string(ctx.author)} used `{self.__command_string(ctx)}` (completed).')
 
 
 async def setup(bot) -> None:

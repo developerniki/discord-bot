@@ -12,7 +12,7 @@ from discord.ext import commands, tasks
 from emoji import emojize
 
 from database import TicketRequest, TicketSettingsStore, TicketStore, TicketRequestStore, TicketCooldownStore
-from slimbot import SlimBot, tools
+from slimbot import SlimBot, utils
 
 _logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         channel = await ctx.guild.create_text_channel(
             f'ticket {ticket.id}',
             category=request_channel.category,
-            reason=f'create ticket for user {tools.user_string(member)}',
+            reason=f'create ticket for user {utils.user_string(member)}',
         )
         await channel.set_permissions(
             ctx.guild.get_member(ticket.user_id),
@@ -103,7 +103,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         member = ctx.guild.get_member(ticket.user_id)
         description = f'This ticket has been created by {ctx.author.mention} for user {member.mention}. '
         if ticket.reason:
-            description += f'They have given the following reason:\n{tools.quote_message(ticket.reason)}\n\n'
+            description += f'They have given the following reason:\n{utils.quote_message(ticket.reason)}\n\n'
         description += 'To close this ticket use `/ticket close`. ' \
                        'To add another user to the ticket use `/ticket add <@user>`.'
         embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=discord.Color.yellow(),
@@ -115,10 +115,10 @@ class TicketSystem(commands.Cog, name='Ticket System'):
         # Log the ticket creation.
         description = f'{ctx.author.mention} has created a ticket for {member.mention} at {channel.mention}.'
         if reason:
-            description += f' They have given the following reason:\n{tools.quote_message(reason)}'
+            description += f' They have given the following reason:\n{utils.quote_message(reason)}'
         embed = Embed(title='Manual Ticket Creation', description=description, color=discord.Color.yellow(),
                       timestamp=datetime.now(timezone.utc))
-        embed.set_author(name=tools.user_string(member),
+        embed.set_author(name=utils.user_string(member),
                          url=f'https://discordapp.com/users/{member.id}',
                          icon_url=member.display_avatar)
         file = discord.File(self.bot.config.img_dir / 'accepted_ticket.png', filename='image.png')
@@ -149,7 +149,8 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                     'message': message.content,
                     'embeds': [embed.to_dict() for embed in message.embeds],
                     'references': message.reference.message_id if message.reference else None,
-                    'reactions': [reaction.emoji for reaction in message.reactions]
+                    'reactions': [(reaction.emoji if isinstance(reaction.emoji, str) else reaction.emoji.name)
+                                  for reaction in message.reactions]
                 }
                 for message in log
             ]
@@ -170,7 +171,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
 
                 ticket_user = self.bot.get_user(ticket.user_id)
                 header = f'Transcript of ticket #{ticket.id}, created at {created_at} for ' \
-                         f'user {tools.user_string(ticket_user)}'
+                         f'user {utils.user_string(ticket_user)}'
                 if ticket.reason:
                     header += f' with reason "{ticket.reason}"'
                 header += f' and closed at {closed_at}\n'
@@ -180,7 +181,7 @@ class TicketSystem(commands.Cog, name='Ticket System'):
                 for message in log:
                     message: Message
                     created_at = message.created_at.strftime(time_fmt)
-                    author = tools.user_string(message.author)
+                    author = utils.user_string(message.author)
                     content = message.content.strip()
                     embeds = [json.dumps(embed.to_dict(), separators=(',', ':')) for embed in message.embeds]
                     embeds = '\n'.join(embeds)
@@ -510,10 +511,10 @@ class TicketRequestModal(ui.Modal, title='Ticket Request'):
         # Create the ticket notification embed.
         description = f'{interaction.user.mention} has requested a ticket.'
         if self.reason_txt_input.value:
-            description += f' They have left the following message:\n{tools.quote_message(self.reason_txt_input.value)}'
+            description += f' They have left the following message:\n{utils.quote_message(self.reason_txt_input.value)}'
         embed = Embed(title=f'Ticket Request #{ticket_request.id}', description=description, color=discord.Color.blue(),
                       timestamp=datetime.now(timezone.utc))
-        embed.set_author(name=tools.user_string(interaction.user),
+        embed.set_author(name=utils.user_string(interaction.user),
                          url=f'https://discordapp.com/users/{interaction.user.id}',
                          icon_url=interaction.user.display_avatar)
         file = discord.File(self.ts.bot.config.img_dir / 'accept_reject.png', filename='image.png')
@@ -577,7 +578,7 @@ class TicketNotificationView(ui.View):
             channel = await interaction.guild.create_text_channel(
                 f'ticket {ticket.id}',
                 category=interaction.channel.category,
-                reason=f'create ticket for user {tools.user_string(interaction.user)}',
+                reason=f'create ticket for user {utils.user_string(interaction.user)}',
             )
             ticket_member = interaction.guild.get_member(ticket.user_id)
             await channel.set_permissions(
@@ -592,7 +593,7 @@ class TicketNotificationView(ui.View):
             # Describe why this channel was opened.
             description = f'This ticket has been created at the request of {ticket_member.mention}. '
             if ticket.reason:
-                description += f'They wanted to talk about the following:\n{tools.quote_message(ticket.reason)}\n\n'
+                description += f'They wanted to talk about the following:\n{utils.quote_message(ticket.reason)}\n\n'
             description += 'To close this ticket use `/ticket close`. ' \
                            'To add another user to the ticket use `/ticket add @<user>`.'
             embed = Embed(title=f'Ticket #{ticket.id}', description=description, color=discord.Color.yellow(),
@@ -601,7 +602,7 @@ class TicketNotificationView(ui.View):
             embed.set_thumbnail(url='attachment://image.png')
             await channel.send(embed=embed, file=file)
 
-            _logger.info(f'{interaction.user} accepted the ticket request for user {tools.user_string(ticket_member)} '
+            _logger.info(f'{interaction.user} accepted the ticket request for user {utils.user_string(ticket_member)} '
                          f'with reason {ticket.reason}.')
 
             # Store the decision to accept the ticket in the database.
@@ -664,7 +665,7 @@ class TicketNotificationView(ui.View):
                           'decision. It will be auto-deleted in ~24 hours. '
             if self.ticket_request.reason:
                 description += 'Originally, the user wanted to talk about the following:\n' \
-                               f'{tools.quote_message(self.ticket_request.reason)}\n\n'
+                               f'{utils.quote_message(self.ticket_request.reason)}\n\n'
             description += 'To close this channel use `/ticket close`. ' \
                            'To add another user to the channel use `/ticket add <@user>`.'
             embed = Embed(title=f'Ticket Request #{self.ticket_request.id} [REJECTED]',
@@ -675,7 +676,7 @@ class TicketNotificationView(ui.View):
             embed.set_thumbnail(url='attachment://image.png')
             await channel.send(embed=embed, file=file)
 
-            _logger.info(f'{interaction.user} rejected the ticket request for user {tools.user_string(ticket_member)} '
+            _logger.info(f'{interaction.user} rejected the ticket request for user {utils.user_string(ticket_member)} '
                          f'with reason {self.ticket_request.reason}.')
 
             # Store the decision to reject the ticket request in the database and apply a cooldown to the user.

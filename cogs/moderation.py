@@ -4,7 +4,7 @@ from typing import Optional
 from discord import TextChannel
 from discord.ext import commands
 
-from slimbot import SlimBot, tools
+from slimbot import SlimBot, utils
 
 _logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class Moderation(commands.Cog, name='Moderation'):
         if channel is None:
             channel = ctx.channel
         await channel.send(message)
-        await ctx.send(f'Sent the following message in {channel.mention}:\n{tools.quote_message(message)}',
+        await ctx.send(f'Sent the following message in {channel.mention}:\n{utils.quote_message(message)}',
                        ephemeral=True)
 
     @commands.hybrid_command()
