@@ -2,10 +2,10 @@ import json
 import logging
 import random
 import re
+import tomllib
 from typing import List, Optional
 
 import emoji
-import toml
 from discord import User
 from discord.ext import commands
 from emoji import demojize, emojize
@@ -27,8 +27,8 @@ class Fun(commands.Cog, name='Fun'):
         config_file = self.bot.config.ext_dir / 'fun_config.toml'
 
         try:
-            with open(config_file) as file:
-                config = toml.load(file)
+            with open(config_file, mode='rb') as file:
+                config = tomllib.load(file)
                 self.hug_links = config['hug_links']
                 self.pattern_to_action = [
                     PatternToAction(

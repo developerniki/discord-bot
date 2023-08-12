@@ -1,11 +1,10 @@
 from __future__ import annotations  # TODO Remove in Python version 3.11.
 
 import logging
+import tomllib
 from pathlib import Path
+from tomllib import TOMLDecodeError
 from typing import Dict
-
-import toml
-from toml import TomlDecodeError
 
 _logger = logging.getLogger(__name__)
 CONFIG_FILENAME = 'config.toml'
@@ -78,8 +77,8 @@ class Config:
             raise ParseError
 
         try:
-            config = toml.loads(cfg_file.read_text())
-        except TomlDecodeError:
+            config = tomllib.load(cfg_file.open(mode='b'))
+        except TOMLDecodeError:
             _logger.exception('Error while parsing the config file!')
             raise ParseError
 
