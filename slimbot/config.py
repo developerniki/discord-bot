@@ -77,7 +77,7 @@ class Config:
             raise ParseError
 
         try:
-            config = tomllib.load(cfg_file.open(mode='b'))
+            config = tomllib.load(cfg_file.open(mode='rb'))
         except TOMLDecodeError:
             _logger.exception('Error while parsing the config file!')
             raise ParseError
